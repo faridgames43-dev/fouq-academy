@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}اللاعبون{% endblock %}
+{% block page_title %}اللاعبون ({{ players|length }}){% endblock %}
+{% block content %}
+<div class="section flex justify-between items-center flex-wrap gap-8">
+  <form class="flex gap-8 flex-wrap">
+    <select name="group_id" class="field" style="min-width:160px" onchange="this.form.submit()">
+      <option value="">كل المجموعات</option>
+      {% for gr in groups %}<option value="{{ gr.id }}" {% if group_filter==gr.id|string %}selected{% endif %}>{{ gr.name }}</option>{% endfor %}
+    </select>
+    <select name="status" class="field" style="min-width:160px" onchange="this.form.submit()">
+      <option value="">كل الحالات</option>
+      <option value="ACTIVE" {% if status_filter=='ACTIVE' %}selected{% endif %}>نشط</option>
+      <option value="CONVERSION_PENDING" {% if status_filter=='CONVERSION_PENDING' %}selected{% endif %}>مؤهل للانتقال لفوق</option>
+      <option value="INACTIVE" {% if status_filter=='INACTIVE' %}selected{% endif %}>غير نشط</option>
+    </select>
+  </form>
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+  <a class="btn btn-primary" href="/players/new">+ لاعب جديد</a>
+  {% endif %}
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>اللاعب</th><th>الكود</th><th>الفئة</th><th>المجموعة</th><th>النوع</th>
+      <th>حالة الاشتراك</th><th>الأهلية للحضور</th><th>الحصص المتاحة</th><th></th></tr></thead>
+    <tbody>
+    {% for p in players %}
+      <tr>
+        <td>
+          <div class="player-card" style="padding:4px 0;">
+            <div class="avatar">{{ p.first_name[0] }}</div>
+            <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div></div>
+          </div>
+        </td>
+        <td>{{ p.player_code }}</td>
+        <td>{{ p.category_name or '-' }}</td>
+        <td>{{ p.group_name or '-' }}</td>
+        <td>{% if p.player_type=='LEGACY' %}<span class="badge badge-purple">تواصل سابقًا</span>{% else %}<span class="badge badge-blue">فوق</span>{% endif %}</td>
+        <td>
+          {% set s = p.sub_status %}
+          {% if s=='ACTIVE' %}<span class="badge badge-green">نشط</span>
+          {% elif s=='EXPIRING_SOON' %}<span class="badge badge-amber">ينتهي قريبًا</span>
+          {% elif s=='EXPIRED' %}<span class="badge badge-red">منتهٍ</span>
+          {% elif s=='FROZEN' %}<span class="badge badge-blue">مجمّد</span>
+          {% else %}<span class="badge badge-gray">لا يوجد</span>{% endif %}
+        </td>
+        <td>
+          {% set e = p.eligibility.code %}
+          {% if e=='ELIGIBLE' %}<span class="badge badge-green">مؤهل</span>
+          {% elif e=='COMPENSATION_ONLY' %}<span class="badge badge-amber">استكمال مستحقة</span>
+          {% elif e=='NO_SESSIONS' %}<span class="badge badge-red">يحتاج تجديد</span>
+          {% elif e=='SUSPENDED' %}<span class="badge badge-gray">مجمّد</span>
+          {% else %}<span class="badge badge-purple">صلاحية إدارية</span>{% endif %}
+        </td>
+        <td>{{ p.balances.TOTAL }}</td>
+        <td><a class="btn btn-sm btn-outline" href="/players/{{ p.id }}">الملف ←</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="muted">لا يوجد لاعبون مطابقون</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

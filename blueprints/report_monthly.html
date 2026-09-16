@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}التقرير الشهري{% endblock %}
+{% block page_title %}التقرير الشهري للإدارة{% endblock %}
+{% block content %}
+<div class="section"><a class="btn btn-gold" href="?format=pdf" target="_blank">تنزيل PDF</a></div>
+<div class="grid grid-4">
+  {% for label, key, suffix in [
+    ('اللاعبون النشطون','active_players',''), ('جديد (30 يوم)','new_players',''),
+    ('معدل التجديد','renewal_rate','٪'), ('التسرب','churn','٪'),
+    ('إيراد الشهر','revenue_month',' ر.س'), ('معدل الحضور','avg_attendance','٪'),
+    ('متوسط التطور','avg_development',''), ('حصص مستحقة قائمة','outstanding_compensation',''),
+  ] %}
+  <div class="card"><div class="card-title">{{ label }}</div><div class="kpi-value">{{ data[key] }}{{ suffix }}</div></div>
+  {% endfor %}
+</div>
+{% endblock %}

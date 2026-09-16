@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}حسابي{% endblock %}
+{% block page_title %}هلا {{ player.first_name }} 👋{% endblock %}
+{% block content %}
+
+<div class="hub-hero section">
+  <div class="avatar" style="width:72px;height:72px;font-size:26px;background:var(--gold);color:#241a02;">{{ player.first_name[0] }}</div>
+  <div style="flex:1;">
+    <span class="level-chip">{{ level.name if level else 'الانطلاقة' }} ↑</span>
+    <h1>{{ player.first_name }} {{ player.last_name }}</h1>
+    <div class="muted" style="color:#cfd9ea;">رايحين فوق!</div>
+  </div>
+  <div class="points-chip">⭐ {{ points }} رصيد فوق</div>
+</div>
+
+<div class="grid grid-4 section">
+  <div class="card"><div class="card-title">تطورك هذا الشهر</div>
+    <div class="kpi-value">{{ overall or '-' }}</div>
+    {% if overall %}<div class="kpi-sub">{{ child_label(overall) }}</div>{% endif %}
+  </div>
+  <div class="card"><div class="card-title">نسبة حضورك</div><div class="kpi-value">{{ attendance_pct }}٪</div></div>
+  <div class="card"><div class="card-title">حصصك</div><div class="kpi-value">{{ balances.TOTAL }}</div>
+    <div class="kpi-sub">أساسية {{ balances.REGULAR }} · تعويضية {{ balances.COMPENSATION }}</div></div>
+  <div class="card"><div class="card-title">آخر إنجاز</div>
+    <div style="font-size:22px;">{{ last_achievement.icon if last_achievement else '🎯' }}</div>
+    <div class="kpi-sub">{{ last_achievement.name if last_achievement else 'ابدأ رحلتك!' }}</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="card">
+    <div class="card-title">طريقك للمستوى القادم</div>
+    {% if readiness and not readiness.at_max %}
+      <div class="flex items-center gap-12">
+        <div class="progress-ring">
+          <svg width="84" height="84"><circle cx="42" cy="42" r="36" stroke="#e6e9f2" stroke-width="9" fill="none"/>
+          <circle cx="42" cy="42" r="36" stroke="#cf931e" stroke-width="9" fill="none"
+            stroke-dasharray="{{ (readiness.readiness_pct/100*226)|round(1) }} 226" stroke-linecap="round"/></svg>
+          <div class="ring-value">{{ readiness.readiness_pct }}٪</div>
+        </div>
+        <div>جاهزيتك للوصول إلى <b>{{ readiness.next_level.name }}</b> ↑
+          {% if readiness.missing %}<ul style="font-size:12px; margin-top:4px;">{% for m in readiness.missing %}<li>{{ m }}</li>{% endfor %}</ul>
+          {% else %}<div class="badge badge-green" style="margin-top:6px;">جاهز — بانتظار اعتماد المدرب ✓</div>{% endif %}
+        </div>
+      </div>
+    {% else %}<p class="muted">أنت في أعلى مستوى حاليًا! 🏆</p>{% endif %}
+  </div>
+</div>
+
+<div class="section">
+  <div class="card-title">إنجازاتك</div>
+  <div class="flex flex-wrap gap-8" style="margin-top:8px;">
+    {% for a in achievements %}<span class="achievement-chip">{{ a.icon }} {{ a.name }}</span>
+    {% else %}<span class="muted">لم تحقق إنجازات بعد — استمر في الحضور!</span>{% endfor %}
+  </div>
+</div>
+
+<div class="section">
+  <a class="btn btn-gold btn-block" href="/rewards/store">🎁 متجر فوق — استبدل رصيدك</a>
+</div>
+{% endblock %}

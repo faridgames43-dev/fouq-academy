@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}إضافة رصيد فوق{% endblock %}
+{% block page_title %}إضافة رصيد فوق — {{ player.first_name }} {{ player.last_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+  {% if current_user.role == 'COACH' %}
+    <p class="muted">كمدرب، لا يمكنك منح أكثر من {{ cap }} نقطة يوميًا لكل لاعب.</p>
+  {% endif %}
+  <form method="post">
+    <div class="field"><label>الكمية (يمكن أن تكون سالبة لتصحيح خطأ)</label><input type="number" name="amount" value="10" required></div>
+    <div class="field"><label>التصنيف</label>
+      <select name="category">
+        {% for k,v in categories.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field"><label>السبب</label><input name="reason" placeholder="مثال: التزام ممتاز هذا الأسبوع"></div>
+    <button class="btn btn-gold btn-block" type="submit">تأكيد</button>
+  </form>
+</div>
+{% endblock %}

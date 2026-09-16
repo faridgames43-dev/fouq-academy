@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}متجر فوق{% endblock %}
+{% block page_title %}متجر فوق ⭐ {{ balance }}{% endblock %}
+{% block content %}
+<div class="grid grid-4">
+  {% for r in rewards %}
+  <div class="reward-card">
+    <b>{{ r.name }}</b>
+    <p class="muted" style="font-size:12px;">{{ r.description }}</p>
+    <div class="cost">{{ r.cost }} ⭐</div>
+    <div class="muted" style="font-size:11px;">المخزون: {{ r.stock }}</div>
+    <form method="post">
+      <input type="hidden" name="reward_id" value="{{ r.id }}">
+      <button class="btn btn-gold btn-sm btn-block" style="margin-top:8px;"
+        {% if balance < r.cost or r.stock <= 0 %}disabled{% endif %} type="submit">استبدال</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

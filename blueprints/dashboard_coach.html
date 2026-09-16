@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}لوحتي{% endblock %}
+{% block page_title %}هلا كابتن {{ current_user.name }} 👋{% endblock %}
+{% block content %}
+
+<div class="section grid grid-3">
+  <a class="btn btn-gold btn-block" href="/attendance">▶ بدء التحضير</a>
+  <a class="btn btn-primary btn-block" href="/assessments/quick">📝 رصد جماعي سريع</a>
+  <a class="btn btn-outline btn-block" href="/players">🧒 لاعبيّ ({{ players_count }})</a>
+</div>
+
+{% if unfinished %}
+<div class="section">
+  <div class="attention-card">
+    <h2>⏱️ حصص بحاجة للإغلاق</h2>
+    <div class="attention-list">
+      {% for s in unfinished %}
+        <div class="attention-item"><span class="emoji">⚽</span><span>{{ s.group_name }} — {{ s.session_date }} {{ s.start_time }}</span>
+          <a class="go" href="/attendance/session/{{ s.id }}">فتح ←</a></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="section">
+  <div class="section-header"><h2>حصصي القادمة</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>التاريخ</th><th>الوقت</th><th>المجموعة</th><th></th></tr></thead>
+      <tbody>
+      {% for s in today_sessions %}
+        <tr><td>{{ s.session_date }}</td><td>{{ s.start_time }}</td><td>{{ s.group_name }}</td>
+          <td><a class="btn btn-sm btn-outline" href="/attendance/session/{{ s.id }}">فتح</a></td></tr>
+      {% else %}<tr><td colspan="4" class="muted">لا توجد حصص قادمة</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section grid grid-2">
+  <div class="card">
+    <div class="card-title">تقييمات ناقصة</div>
+    <div class="kpi-value">{{ missing_assessments }}</div>
+    <a class="btn btn-sm btn-outline" href="/players" style="margin-top:8px;">مراجعة اللاعبين</a>
+  </div>
+  <div class="card">
+    <div class="card-title">لاعبون يحتاجون متابعة (غياب متكرر)</div>
+    {% if need_followup %}
+      <ul style="margin-top:8px;">
+      {% for p in need_followup %}
+        <li><a href="/players/{{ p.id }}">{{ p.first_name }} {{ p.last_name }}</a></li>
+      {% endfor %}
+      </ul>
+    {% else %}<p class="muted">لا يوجد</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

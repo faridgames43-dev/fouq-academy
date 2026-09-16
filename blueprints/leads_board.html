@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}العملاء المحتملون{% endblock %}
+{% block page_title %}العملاء المحتملون (Leads CRM){% endblock %}
+{% block content %}
+<div class="section">
+  <div class="card">
+    <div class="card-title">تسجيل عميل محتمل جديد</div>
+    <form method="post" class="form-grid">
+      <div class="field"><label>اسم ولي الأمر</label><input name="parent_name" required></div>
+      <div class="field"><label>اسم الطفل</label><input name="child_name" required></div>
+      <div class="field"><label>العمر</label><input type="number" name="child_age"></div>
+      <div class="field"><label>الجوال</label><input name="phone" required></div>
+      <div class="field"><label>المصدر</label><input name="source" placeholder="إنستغرام، توصية، ..."></div>
+      <div class="field"><label>الحملة</label><input name="campaign"></div>
+      <button class="btn btn-primary" type="submit" style="align-self:end;">إضافة</button>
+    </form>
+  </div>
+</div>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>ولي الأمر</th><th>الطفل</th><th>الجوال</th><th>المصدر</th><th>الحالة</th><th>إجراء</th></tr></thead>
+    <tbody>
+    {% for l in leads %}
+      <tr>
+        <td>{{ l.parent_name }}</td><td>{{ l.child_name }} ({{ l.child_age }})</td><td>{{ l.phone }}</td><td>{{ l.source }}</td>
+        <td><span class="badge badge-blue">{{ status_labels.get(l.status, l.status) }}</span></td>
+        <td class="flex gap-8 flex-wrap">
+          <form method="post" action="/leads/{{ l.id }}/status"><input type="hidden" name="status" value="CONTACTED"><button class="btn btn-sm btn-outline">تم التواصل</button></form>
+          <form method="post" action="/leads/{{ l.id }}/book_trial" class="flex gap-8">
+            <select name="group_id" style="width:110px;">{% for g in groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}</select>
+            <input type="date" name="trial_date" required style="width:120px;">
+            <button class="btn btn-sm btn-gold">حجز تجربة</button>
+          </form>
+          <form method="post" action="/leads/{{ l.id }}/status"><input type="hidden" name="status" value="LOST"><button class="btn btn-sm btn-danger">فقدناه</button></form>
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="6" class="muted">لا يوجد عملاء محتملون</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

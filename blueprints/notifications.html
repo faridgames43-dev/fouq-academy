@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}التنبيهات{% endblock %}
+{% block page_title %}مركز التنبيهات{% endblock %}
+{% block content %}
+<div class="card">
+  {% if items %}
+  <div class="attention-list">
+    {% for n in items %}
+      <div class="attention-item">
+        <span class="emoji">🔔</span>
+        <div>
+          <div><b>{{ n.title }}</b></div>
+          {% if n.body %}<div class="muted">{{ n.body }}</div>{% endif %}
+        </div>
+        <span class="muted" style="margin-right:auto; font-size:11px;">{{ n.created_at }}</span>
+      </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="emoji">✅</div><p>لا توجد تنبيهات جديدة</p></div>
+  {% endif %}
+</div>
+{% endblock %}

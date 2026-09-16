@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}إضافة حصص تعويضية{% endblock %}
+{% block page_title %}إضافة حصص تعويضية — {{ player.first_name }} {{ player.last_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px;">
+  <p class="muted">لكل حصة تعويضية سبب واجب التسجيل، وتاريخ صلاحية واضح، وتُسجَّل في سجل التدقيق.</p>
+  <form method="post">
+    <div class="field"><label>عدد الحصص</label><input type="number" name="quantity" value="1" min="1" required></div>
+    <div class="field"><label>سبب المنح</label>
+      <select name="reason_code" required>
+        <option value="CANCELLED_SESSION">إلغاء حصة من الأكاديمية</option>
+        <option value="APPROVED_EXCUSE">عذر معتمد</option>
+        <option value="ADMIN_DECISION">قرار إداري</option>
+        <option value="EXCEPTIONAL">تعويض استثنائي</option>
+        <option value="OTHER">سبب آخر</option>
+      </select>
+    </div>
+    <div class="field"><label>تفاصيل السبب</label><textarea name="reason_text" rows="2" required></textarea></div>
+    <div class="field"><label>عدد أيام صلاحية التعويض</label>
+      <input type="number" name="expiry_days" value="{{ default_days }}" min="1">
+      <span class="field-hint">الافتراضي حسب سياسة الأكاديمية: {{ default_days }} يومًا من اليوم — قابل للتعديل من الإعدادات.</span>
+    </div>
+    <button class="btn btn-gold btn-block" type="submit">إضافة الحصص التعويضية</button>
+  </form>
+</div>
+{% endblock %}

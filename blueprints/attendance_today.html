@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}التحضير{% endblock %}
+{% block page_title %}تحضير اليوم{% endblock %}
+{% block content %}
+<div class="section flex justify-between items-center flex-wrap gap-8">
+  <form class="flex gap-8">
+    <input type="date" name="date" value="{{ sel_date }}" onchange="this.form.submit()">
+  </form>
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+  <a class="btn btn-primary" href="/attendance/new">+ إنشاء حصة</a>
+  {% endif %}
+</div>
+<div class="grid grid-3">
+  {% for s in sessions %}
+  <div class="card">
+    <div class="card-title">{{ s.group_name }}</div>
+    <h3>{{ s.start_time }} - {{ s.end_time }}</h3>
+    <p class="muted">المدرب: {{ s.coach_name or '-' }}</p>
+    <div class="progress-bar" style="margin:8px 0;"><span style="width:{{ (s.present_count / s.roster_size * 100) if s.roster_size else 0 }}%;"></span></div>
+    <div class="kpi-sub">{{ s.present_count }} / {{ s.roster_size }} تم تحضيرهم</div>
+    <div class="flex gap-8" style="margin-top:10px;">
+      <span class="badge {{ {'SCHEDULED':'badge-blue','STARTED':'badge-amber','COMPLETED':'badge-green','CANCELLED':'badge-red'}[s.status] }}">{{ {'SCHEDULED':'مجدولة','STARTED':'جارية','COMPLETED':'مكتملة','CANCELLED':'ملغاة'}[s.status] }}</span>
+      <a class="btn btn-sm btn-gold" href="/attendance/session/{{ s.id }}" style="margin-right:auto;">فتح التحضير ←</a>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="emoji">📅</div><p>لا توجد حصص في هذا التاريخ</p></div>
+  {% endfor %}
+</div>
+{% endblock %}

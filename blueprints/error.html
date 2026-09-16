@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}خطأ {{ code }}{% endblock %}
+{% block page_title %}خطأ {{ code }}{% endblock %}
+{% block content %}
+<div class="card empty-state">
+  <div class="emoji">🚧</div>
+  <h2>{{ message }}</h2>
+  <a class="btn btn-primary" href="/">العودة للرئيسية</a>
+</div>
+{% endblock %}
+{% block guest_content %}
+<div class="auth-page"><div class="auth-card"><h1>{{ code }}</h1><p>{{ message }}</p>
+<a class="btn btn-primary" href="/login">تسجيل الدخول</a></div></div>
+{% endblock %}

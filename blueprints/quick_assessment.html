@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}رصد سريع{% endblock %}
+{% block page_title %}الرصد السريع للمدرب{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="get" class="flex gap-8" style="margin-bottom:16px;">
+    <select name="group_id" onchange="this.form.submit()">
+      <option value="">اختر المجموعة</option>
+      {% for gr in groups %}<option value="{{ gr.id }}" {% if selected_group==gr.id|string %}selected{% endif %}>{{ gr.name }}</option>{% endfor %}
+    </select>
+  </form>
+
+  {% if players %}
+  <form method="post">
+    <input type="hidden" name="group_id" value="{{ selected_group }}">
+    <div class="form-grid">
+      <div class="field"><label>المحور / المهارة</label>
+        <select name="metric_id" required>
+          {% for m in metrics %}<option value="{{ m.id }}">{{ m.cat_name }} — {{ m.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field"><label>الدرجة (0-100) لكل من تحددهم</label><input type="number" name="score" min="0" max="100" value="80" required></div>
+    </div>
+    <div class="attendance-grid" style="margin-top:10px;">
+      {% for p in players %}
+      <label class="attend-card" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" name="player_ids" value="{{ p.id }}">
+        <div class="avatar">{{ p.first_name[0] }}</div>
+        <div>{{ p.first_name }} {{ p.last_name }}</div>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="flex gap-8" style="margin-top:14px;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelectorAll('input[name=player_ids]').forEach(c=>c.checked=true)">تحديد الكل</button>
+      <button class="btn btn-gold" type="submit">حفظ الرصد للمحددين</button>
+    </div>
+  </form>
+  {% else %}
+    <p class="muted">اختر مجموعة لعرض اللاعبين</p>
+  {% endif %}
+</div>
+{% endblock %}

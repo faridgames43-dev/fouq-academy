@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}متجر فوق{% endblock %}
+{% block page_title %}إدارة متجر فوق والاستبدالات{% endblock %}
+{% block content %}
+<div class="section">
+  <div class="section-header"><h2>المنتجات</h2></div>
+  <div class="grid grid-4">
+    {% for r in rewards %}
+    <div class="reward-card">
+      <b>{{ r.name }}</b>
+      <div class="cost">{{ r.cost }} ⭐</div>
+      <div class="muted" style="font-size:12px;">المخزون: {{ r.stock }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h2>طلبات الاستبدال</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>اللاعب</th><th>الجائزة</th><th>التكلفة</th><th>الحالة</th><th>تاريخ الطلب</th><th></th></tr></thead>
+    <tbody>
+    {% for rd in redemptions %}
+      <tr>
+        <td>{{ rd.first_name }} {{ rd.last_name }} ({{ rd.player_code }})</td>
+        <td>{{ rd.reward_name }}</td><td>{{ rd.cost }}</td>
+        <td><span class="badge {{ {'PENDING':'badge-amber','APPROVED':'badge-blue','READY':'badge-blue','COMPLETED':'badge-green','CANCELLED':'badge-red'}[rd.status] }}">{{ rd.status }}</span></td>
+        <td>{{ rd.requested_at }}</td>
+        <td class="flex gap-8">
+          {% if rd.status == 'PENDING' %}
+            <form method="post" action="/rewards/redemptions/{{ rd.id }}/APPROVED"><button class="btn btn-sm btn-outline">قبول</button></form>
+            <form method="post" action="/rewards/redemptions/{{ rd.id }}/CANCELLED"><button class="btn btn-sm btn-danger">رفض</button></form>
+          {% elif rd.status == 'APPROVED' %}
+            <form method="post" action="/rewards/redemptions/{{ rd.id }}/READY"><button class="btn btn-sm btn-outline">جاهز للاستلام</button></form>
+          {% elif rd.status == 'READY' %}
+            <form method="post" action="/rewards/redemptions/{{ rd.id }}/COMPLETED"><button class="btn btn-sm btn-gold">تم الاستلام</button></form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="6" class="muted">لا يوجد طلبات</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

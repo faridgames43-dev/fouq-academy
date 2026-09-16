@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"></head>
+<body style="background:#fff;">
+<div class="print-page">
+  <div class="print-header">
+    <div>
+      <h2>تقرير تطور اللاعب</h2>
+      <div class="muted">{{ player.first_name }} {{ player.last_name }} — {{ player.player_code }} — {{ generated_at }}</div>
+    </div>
+    <img src="{{ url_for('static', filename='img/logo.png') }}">
+  </div>
+
+  <div class="print-section-title">ملخص اللاعب</div>
+  <table class="print-table">
+    <tr><td>الفئة</td><td>{{ player.category_name }}</td><td>الفرع</td><td>{{ player.branch_name }}</td></tr>
+    <tr><td>المجموعة</td><td>{{ player.group_name }}</td><td>المدرب</td><td>{{ player.coach_name }}</td></tr>
+    <tr><td>المستوى الحالي</td><td>{{ level.name if level else '-' }}</td><td>رصيد فوق</td><td>{{ points }} ⭐</td></tr>
+  </table>
+
+  <div class="print-section-title">الحصص والحضور</div>
+  <table class="print-table">
+    <tr><td>إجمالي الحصص المسجّلة</td><td>{{ total_sessions }}</td><td>نسبة الالتزام</td><td>{{ attendance_pct }}٪</td></tr>
+    <tr><td>حاضر</td><td>{{ present }}</td><td>غائب</td><td>{{ absent }}</td></tr>
+    <tr><td>حصص أساسية متبقية</td><td>{{ balances.REGULAR }}</td><td>حصص تعويضية متبقية</td><td>{{ balances.COMPENSATION }}</td></tr>
+  </table>
+
+  <div class="print-section-title">التطور (المهاري / اللياقي / السلوكي / الانضباط)</div>
+  <table class="print-table">
+    <thead><tr><th>التاريخ</th><th>النوع</th><th>المهاري</th><th>اللياقي</th><th>السلوكي</th><th>الانضباط</th><th>العام</th></tr></thead>
+    <tbody>
+    {% for d in dev %}
+      <tr>
+        <td>{{ d.assessment.assessment_date }}</td><td>{{ d.assessment.type }}</td>
+        <td>{{ d.breakdown.SKILL if d.breakdown.SKILL is not none else '-' }}</td>
+        <td>{{ d.breakdown.FITNESS if d.breakdown.FITNESS is not none else '-' }}</td>
+        <td>{{ d.breakdown.BEHAVIOR if d.breakdown.BEHAVIOR is not none else '-' }}</td>
+        <td>{{ d.breakdown.DISCIPLINE if d.breakdown.DISCIPLINE is not none else '-' }}</td>
+        <td>{{ d.overall if d.overall is not none else '-' }} ({{ child_label(d.overall or 0) }})</td>
+      </tr>
+    {% else %}<tr><td colspan="7">لا يوجد تقييمات مسجّلة بعد</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if first_overall is not none and last_overall is not none %}
+    <p>التطور العام: من {{ first_overall }} إلى {{ last_overall }}
+    ({{ '+' if last_overall >= first_overall else '' }}{{ (last_overall - first_overall)|round(1) }} نقطة)</p>
+  {% endif %}
+
+  <div class="print-section-title">الإنجازات</div>
+  <p>{% for a in achievements %}{{ a.icon }} {{ a.name }}{% if not loop.last %} — {% endif %}{% else %}لا توجد إنجازات مسجّلة بعد{% endfor %}</p>
+
+  <div class="print-section-title">ملاحظة المدرب</div>
+  <p>{{ player.notes or 'لا توجد ملاحظات إضافية لهذه الفترة.' }}</p>
+
+  <div class="print-section-title">هدف الفترة القادمة</div>
+  <p>الاستمرار في رفع نسبة الالتزام والمشاركة في التقييمات الدورية القادمة، مع التركيز على المحاور الأقل تقييمًا أعلاه.</p>
+</div>
+</body>
+</html>

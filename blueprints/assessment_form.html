@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}تقييم اللاعب{% endblock %}
+{% block page_title %}تقييم — {{ player.first_name }} {{ player.last_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:760px;">
+  <form method="post">
+    <div class="field">
+      <label>نوع التقييم</label>
+      <select name="type">
+        {% if not has_initial %}<option value="INITIAL">تقييم أولي (Initial Assessment)</option>{% endif %}
+        <option value="PERIODIC" selected>تقييم دوري (30/60/90 يوم)</option>
+      </select>
+    </div>
+    {% for cat in categories %}
+      <div class="print-section-title" style="background:var(--navy-700);">{{ cat.name }} (وزن {{ cat.weight }}٪)</div>
+      <div class="form-grid">
+        {% for m in metrics if m.category_id == cat.id %}
+          <div class="field"><label>{{ m.name }}</label>
+            <input type="number" min="0" max="100" name="metric_{{ m.id }}" placeholder="0-100"></div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+    <div class="field"><label>ملاحظة المدرب</label><textarea name="notes" rows="3"></textarea></div>
+    <button class="btn btn-gold btn-block" type="submit">حفظ التقييم</button>
+  </form>
+</div>
+{% endblock %}

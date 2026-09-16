@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}سجل التدقيق{% endblock %}
+{% block page_title %}سجل التدقيق (Audit Log){% endblock %}
+{% block content %}
+<form class="section">
+  <select name="entity" onchange="this.form.submit()">
+    <option value="">كل الأنواع</option>
+    {% for e in entities %}<option value="{{ e.entity_type }}" {% if entity_filter==e.entity_type %}selected{% endif %}>{{ e.entity_type }}</option>{% endfor %}
+  </select>
+</form>
+<div class="table-wrap"><table>
+  <thead><tr><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>النوع</th><th>المعرف</th><th>السبب</th></tr></thead>
+  <tbody>
+  {% for l in logs %}
+    <tr><td>{{ l.created_at }}</td><td>{{ l.user_name or '-' }}</td><td>{{ l.action }}</td>
+      <td>{{ l.entity_type }}</td><td>{{ l.entity_id or '-' }}</td><td>{{ l.reason or '-' }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">لا يوجد سجلات</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

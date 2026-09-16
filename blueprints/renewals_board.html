@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}التجديدات{% endblock %}
+{% block page_title %}مركز التجديدات (Renewal CRM){% endblock %}
+{% block content %}
+
+{% macro player_row(p) %}
+<div class="attention-item" style="align-items:flex-start;">
+  <div class="avatar">{{ p.first_name[0] }}</div>
+  <div style="flex:1;">
+    <b><a href="/players/{{ p.id }}">{{ p.first_name }} {{ p.last_name }}</a></b>
+    <div class="muted" style="font-size:12px;">ينتهي: {{ p.end_date }} · الحصص المتاحة: {{ p.balances.TOTAL }}
+      {% if p.risk %} · مخاطر:
+      {% if p.risk.level=='HIGH' %}<span class="badge badge-red">مرتفعة</span>{% elif p.risk.level=='MEDIUM' %}<span class="badge badge-amber">متوسطة</span>{% else %}<span class="badge badge-green">منخفضة</span>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+  <a class="btn btn-sm btn-gold" href="/players/{{ p.id }}/subscribe">تجديد</a>
+</div>
+{% endmacro %}
+
+<div class="section grid grid-2">
+  <div class="card">
+    <h2>⏳ سينتهي خلال 7 أيام ({{ expiring_7|length }})</h2>
+    <div class="attention-list">{% for p in expiring_7 %}{{ player_row(p) }}{% else %}<p class="muted">لا يوجد</p>{% endfor %}</div>
+  </div>
+  <div class="card">
+    <h2>🎯 منتهٍ ولديه حصص مستحقة ({{ expired_with_comp|length }})</h2>
+    <p class="muted" style="font-size:12px;">لا حاجة لإلزامهم بالتجديد فورًا — يمكنهم استخدام حقهم أولًا.</p>
+    <div class="attention-list">{% for p in expired_with_comp %}{{ player_row(p) }}{% else %}<p class="muted">لا يوجد</p>{% endfor %}</div>
+  </div>
+  <div class="card">
+    <h2>🛑 منتهٍ ولا يملك حصصًا ({{ expired_no_sessions|length }})</h2>
+    <div class="attention-list">{% for p in expired_no_sessions %}{{ player_row(p) }}{% else %}<p class="muted">لا يوجد</p>{% endfor %}</div>
+  </div>
+  <div class="card">
+    <h2>✅ نشط ({{ active|length }})</h2>
+    <div class="attention-list">{% for p in active %}{{ player_row(p) }}{% else %}<p class="muted">لا يوجد</p>{% endfor %}</div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}الإعدادات{% endblock %}
+{% block page_title %}إعدادات الأكاديمية{% endblock %}
+{% block content %}
+
+<div class="section">
+  <div class="section-header"><h2>السياسات (Settings محرَّكة النظام)</h2></div>
+  <div class="card">
+    <form method="post" action="/settings/policies">
+      <div class="form-grid">
+        <div class="field"><label>صلاحية الحصص التعويضية (يوم)</label><input type="number" name="compensation_expiry_days" value="{{ comp_days }}"></div>
+        <div class="field"><label>الحد اليومي لنقاط المدرب لكل لاعب</label><input type="number" name="coach_daily_points_cap" value="{{ coach_cap }}"></div>
+        <div class="field"><label>وزن المهاري ٪</label><input type="number" name="w_skill" value="{{ weights.SKILL }}"></div>
+        <div class="field"><label>وزن اللياقي ٪</label><input type="number" name="w_fitness" value="{{ weights.FITNESS }}"></div>
+        <div class="field"><label>وزن السلوكي ٪</label><input type="number" name="w_behavior" value="{{ weights.BEHAVIOR }}"></div>
+        <div class="field"><label>وزن الانضباط ٪</label><input type="number" name="w_discipline" value="{{ weights.DISCIPLINE }}"></div>
+      </div>
+      <button class="btn btn-gold" type="submit">حفظ السياسات</button>
+    </form>
+  </div>
+</div>
+
+<div class="section grid grid-2">
+  <div class="card">
+    <div class="card-title">الفروع</div>
+    <ul>{% for b in branches %}<li>{{ b.name }} — {{ b.city }} {% if not b.active %}(قيد التخطيط){% endif %}</li>{% endfor %}</ul>
+    <form method="post" action="/settings/branches/new" class="flex gap-8" style="margin-top:8px;">
+      <input name="name" placeholder="اسم الفرع" required><input name="city" placeholder="المدينة">
+      <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">الباقات</div>
+    <ul>{% for p in packages %}<li>{{ p.name }} — {{ p.price }} ر.س / {{ p.sessions_count }} حصة</li>{% endfor %}</ul>
+    <form method="post" action="/settings/packages/new" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+      <input name="name" placeholder="اسم الباقة" required>
+      <input name="price" type="number" placeholder="السعر" required style="width:90px;">
+      <input name="sessions_count" type="number" placeholder="عدد الحصص" required style="width:100px;">
+      <input name="duration_days" type="number" placeholder="المدة (يوم)" value="30" required style="width:110px;">
+      <select name="category_id">{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+      <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">المجموعات</div>
+    <ul>{% for g in groups %}<li>{{ g.name }} — {{ g.category_name }} — المدرب: {{ g.coach_name or '-' }}</li>{% endfor %}</ul>
+    <form method="post" action="/settings/groups/new" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+      <input name="name" placeholder="اسم المجموعة" required>
+      <select name="branch_id">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+      <select name="category_id">{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+      <select name="coach_id"><option value="">بدون مدرب</option>{% for c in coaches %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+      <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">المدربون</div>
+    <ul>{% for c in coaches %}<li>{{ c.name }} — {{ c.phone }}</li>{% endfor %}</ul>
+    <form method="post" action="/settings/coaches/new" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+      <input name="name" placeholder="الاسم" required><input name="phone" placeholder="الجوال" required>
+      <select name="branch_id">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+      <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="section flex gap-8">
+  <a class="btn btn-sm btn-outline" href="?format=csv">تنزيل CSV</a>
+  <a class="btn btn-sm btn-gold" href="?format=pdf" target="_blank">تنزيل PDF</a>
+</div>
+<div class="table-wrap">
+  <table>
+    {% if rows %}
+    <thead><tr>{% for k in rows[0].keys() %}<th>{{ k }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>{% for v in r.values() %}<td>{{ v }}</td>{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+    {% endif %}
+  </table>
+  {% if not rows %}<div class="empty-state">لا توجد بيانات لهذا التقرير حاليًا</div>{% endif %}
+</div>
+{% endblock %}

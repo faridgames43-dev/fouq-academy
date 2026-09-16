@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}أبنائي{% endblock %}
+{% block page_title %}متابعة الأبناء{% endblock %}
+{% block content %}
+{% if not children %}
+  <div class="empty-state"><div class="emoji">👨‍👦</div><p>لا يوجد أبناء مرتبطون بحسابك حاليًا</p></div>
+{% else %}
+  {% if children|length > 1 %}
+  <div class="section flex gap-8 flex-wrap">
+    {% for c in children %}
+      <a class="btn {{ 'btn-gold' if c.id==selected.id else 'btn-outline' }}" href="?player_id={{ c.id }}">{{ c.first_name }} {{ c.last_name }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="hub-hero section">
+    <div class="avatar" style="width:64px;height:64px;font-size:22px;background:var(--gold);color:#241a02;">{{ selected.first_name[0] }}</div>
+    <div style="flex:1;">
+      <span class="level-chip">{{ level.name if level else 'الانطلاقة' }}</span>
+      <h1>{{ selected.first_name }} {{ selected.last_name }}</h1>
+    </div>
+    <div class="points-chip">⭐ {{ points }} رصيد فوق</div>
+  </div>
+
+  <div class="grid grid-4 section">
+    <div class="card"><div class="card-title">هل يحضر؟</div><div class="kpi-value">{{ attendance_pct }}٪</div></div>
+    <div class="card"><div class="card-title">الحصص المتبقية</div><div class="kpi-value">{{ balances.TOTAL }}</div>
+      <div class="kpi-sub">أساسية {{ balances.REGULAR }} · تعويضية {{ balances.COMPENSATION }}</div></div>
+    <div class="card"><div class="card-title">حالة الاشتراك</div>
+      <div>{% if sub %}
+        {% if sub.status=='ACTIVE' %}<span class="badge badge-green">نشط حتى {{ sub.end_date }}</span>
+        {% elif sub.status=='EXPIRING_SOON' %}<span class="badge badge-amber">ينتهي {{ sub.end_date }}</span>
+        {% elif sub.status=='EXPIRED' %}<span class="badge badge-red">منتهٍ</span>{% endif %}
+      {% else %}<span class="badge badge-gray">لا يوجد اشتراك</span>{% endif %}</div>
+      {% if eligibility.code == 'COMPENSATION_ONLY' %}<div class="kpi-sub">{{ eligibility.detail }}</div>{% endif %}
+    </div>
+    <div class="card"><div class="card-title">التطور العام</div>
+      <div class="kpi-value">{{ overall or '-' }}</div>
+      {% if overall %}<div class="kpi-sub">{{ child_label(overall) }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="section card">
+    <div class="card-title">آخر ملاحظة من المدرب</div>
+    <p>{{ last_note.notes if last_note and last_note.notes else 'لا توجد ملاحظات جديدة' }}</p>
+  </div>
+
+  <div class="section grid grid-2">
+    <div class="card">
+      <div class="card-title">Parent Promise</div>
+      <p style="font-size:13px;">أكاديمية فوق لا تعدك بصناعة لاعب محترف، بل بتدريب منظم، متابعة حقيقية، تقييم مستمر،
+      بيئة تربوية آمنة، ورحلة تطور واضحة يمكنك رؤيتها هنا في أي وقت.</p>
+    </div>
+    <div class="card">
+      <a class="btn btn-gold btn-block" href="/reports/player/{{ selected.id }}/pdf" target="_blank">📄 تحميل تقرير مفصّل PDF</a>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

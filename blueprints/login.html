@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}تسجيل الدخول{% endblock %}
+{% block guest_content %}
+<div class="auth-page">
+  <div class="auth-card">
+    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="FOUQ Academy">
+    <h1>أكاديمية فوق</h1>
+    <div class="tagline">رايحين فوق! ↑</div>
+    {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+    <form method="post">
+      <div class="field">
+        <label>البريد الإلكتروني أو رقم الجوال</label>
+        <input type="text" name="identifier" required autofocus>
+      </div>
+      <div class="field">
+        <label>كلمة المرور</label>
+        <input type="password" name="password" required>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">دخول</button>
+    </form>
+    <div class="demo-accounts">
+      <b>حسابات تجريبية (كلمة المرور للجميع: Fouq@2026):</b><br>
+      {% for label, email, role in demo_accounts %}
+        {{ label }} — {{ email }}<br>
+      {% endfor %}
+      {% if parent_user %}ولي أمر (له ابنان) — {{ parent_user.name }} — {{ parent_user.phone }}<br>{% endif %}
+      {% if player_user %}لاعب — {{ player_user.name }} — {{ player_user.phone }}<br>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

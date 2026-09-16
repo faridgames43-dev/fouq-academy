@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"></head>
+<body style="background:#fff;">
+<div class="print-page">
+  <div class="print-header">
+    <div><h2>التقرير الشهري للإدارة</h2><div class="muted">أكاديمية فوق — فرع الدمام</div></div>
+    <img src="{{ url_for('static', filename='img/logo.png') }}">
+  </div>
+  <table class="print-table">
+    <tbody>
+      <tr><td>اللاعبون النشطون</td><td>{{ data.active_players }}</td></tr>
+      <tr><td>لاعبون جدد (30 يوم)</td><td>{{ data.new_players }}</td></tr>
+      <tr><td>الحضور اليوم</td><td>{{ data.attendance_today }}</td></tr>
+      <tr><td>الغياب اليوم</td><td>{{ data.absence_today }}</td></tr>
+      <tr><td>اشتراكات تنتهي قريبًا</td><td>{{ data.expiring_soon }}</td></tr>
+      <tr><td>اشتراكات منتهية</td><td>{{ data.expired }}</td></tr>
+      <tr><td>حصص مستحقة قائمة (التزامات على الأكاديمية)</td><td>{{ data.outstanding_compensation }}</td></tr>
+      <tr><td>تجديدات (30 يوم)</td><td>{{ data.renewals_30d }}</td></tr>
+      <tr><td>إيراد الشهر الحالي</td><td>{{ "%.0f"|format(data.revenue_month) }} ر.س</td></tr>
+      <tr><td>معدل التجديد</td><td>{{ data.renewal_rate }}٪</td></tr>
+      <tr><td>معدل التسرب (Churn)</td><td>{{ data.churn }}٪</td></tr>
+      <tr><td>معدل الحضور العام</td><td>{{ data.avg_attendance }}٪</td></tr>
+      <tr><td>متوسط تطور اللاعبين</td><td>{{ data.avg_development }}</td></tr>
+      <tr><td>طلبات جوائز معلّقة</td><td>{{ data.rewards_pending }}</td></tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

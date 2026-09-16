@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}الرئيسية{% endblock %}
+{% block page_title %}لوحة التحكم — نظرة اليوم{% endblock %}
+{% block content %}
+
+<div class="section">
+  <div class="grid grid-4">
+    <div class="card"><div class="card-title">اللاعبون النشطون</div><div class="kpi-value">{{ kpis.active_players }}</div>
+      <div class="kpi-sub">جديد آخر 30 يوم: {{ kpis.new_players }}</div></div>
+    <div class="card"><div class="card-title">الحضور اليوم</div><div class="kpi-value">{{ kpis.attendance_today }}</div>
+      <div class="kpi-sub">الغياب اليوم: {{ kpis.absence_today }}</div></div>
+    <div class="card"><div class="card-title">اشتراكات تنتهي قريبًا</div><div class="kpi-value">{{ kpis.expiring_soon }}</div>
+      <div class="kpi-sub">منتهية: {{ kpis.expired }}</div></div>
+    <div class="card"><div class="card-title">حصص مستحقة قائمة</div><div class="kpi-value">{{ kpis.outstanding_compensation }}</div>
+      <div class="kpi-sub">التزامات تعويضية مفتوحة</div></div>
+
+    <div class="card"><div class="card-title">إيراد هذا الشهر</div><div class="kpi-value">{{ "%.0f"|format(kpis.revenue_month) }} ر.س</div>
+      <div class="kpi-sub">تجديدات 30 يوم: {{ kpis.renewals_30d }}</div></div>
+    <div class="card"><div class="card-title">معدل التجديد</div><div class="kpi-value">{{ kpis.renewal_rate }}٪</div>
+      <div class="kpi-sub">التسرب (Churn): {{ kpis.churn }}٪</div></div>
+    <div class="card"><div class="card-title">معدل الحضور العام</div><div class="kpi-value">{{ kpis.avg_attendance }}٪</div>
+      <div class="kpi-sub">متوسط تطور اللاعبين: {{ kpis.avg_development }}</div></div>
+    <div class="card"><div class="card-title">طلبات جوائز معلّقة</div><div class="kpi-value">{{ kpis.rewards_pending }}</div>
+      <div class="kpi-sub"><a href="/rewards">مراجعة الطلبات →</a></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="attention-card">
+    <h2>🚨 يحتاج تدخل اليوم</h2>
+    {% if attention %}
+    <div class="attention-list">
+      {% for item in attention %}
+        <div class="attention-item"><span class="emoji">{{ item.icon }}</span><span>{{ item.text }}</span>
+          <a class="go" href="{{ item.href }}">مراجعة ←</a></div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted" style="margin-top:10px;">لا توجد بنود عاجلة الآن 🎉</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><h2>حصص اليوم</h2><a class="btn btn-outline btn-sm" href="/attendance">فتح شاشة التحضير</a></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>الوقت</th><th>المجموعة</th><th>المدرب</th><th>الحالة</th><th>عدد المسجَّل حضورهم</th><th></th></tr></thead>
+      <tbody>
+      {% for s in today_sessions %}
+        <tr>
+          <td>{{ s.start_time }} - {{ s.end_time }}</td>
+          <td>{{ s.group_name }}</td>
+          <td>{{ s.coach_name or '-' }}</td>
+          <td><span class="badge badge-blue">{{ {'SCHEDULED':'مجدولة','STARTED':'جارية','COMPLETED':'مكتملة','CANCELLED':'ملغاة'}[s.status] }}</span></td>
+          <td>{{ s.marked }}</td>
+          <td><a class="btn btn-sm btn-outline" href="/attendance/session/{{ s.id }}">فتح</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">لا توجد حصص مجدولة اليوم</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section grid grid-4">
+  <a class="btn btn-primary btn-block" href="/players/new">+ لاعب جديد</a>
+  <a class="btn btn-gold btn-block" href="/attendance">▶ بدء التحضير</a>
+  <a class="btn btn-outline btn-block" href="/renewals">🔁 مركز التجديدات</a>
+  <a class="btn btn-outline btn-block" href="/reports">📊 إنشاء تقرير</a>
+</div>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}تحضير الحصة{% endblock %}
+{% block page_title %}{{ ts.group_name }} — {{ ts.session_date }} {{ ts.start_time }}{% endblock %}
+{% block content %}
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-title">مسح سريع (باركود / QR / كود اللاعب)</div>
+  <div class="scan-box">
+    <input id="scan-input" type="text" placeholder="امسح الباركود أو اكتب كود اللاعب واضغط Enter…" autocomplete="off">
+  </div>
+  <div id="scan-feedback" class="scan-feedback"></div>
+</div>
+
+<div class="section flex gap-8 flex-wrap">
+  <form method="post" action="/attendance/session/{{ ts.id }}/mark_all_present" onsubmit="return confirm('تحضير الجميع كحاضر؟ يمكنك تعديل الحالات الفردية بعدها.');">
+    <button class="btn btn-outline" type="submit">✅ تحضير الجميع حاضر</button>
+  </form>
+  <form method="post" action="/attendance/session/{{ ts.id }}/complete">
+    <input type="hidden" name="force" value="1">
+    <button class="btn btn-gold" type="submit">🏁 إنهاء الحصة</button>
+  </form>
+</div>
+
+<div class="attendance-grid section">
+  {% for p in roster %}
+  <div class="attend-card status-{{ p.attendance_status or '' }}" id="card-{{ p.id }}" data-code="{{ p.player_code }}">
+    <div class="player-card" style="padding:0;">
+      <div class="avatar">{{ p.first_name[0] }}</div>
+      <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div><small>{{ p.player_code }}</small></div>
+    </div>
+    <div class="status-buttons">
+      {% for st, label in [('PRESENT','حاضر'),('LATE','متأخر'),('ABSENT','غائب'),('EXCUSED','بعذر')] %}
+        <button type="button" class="status-btn active-{{ st if p.attendance_status==st else '' }}"
+          data-player="{{ p.id }}" data-status="{{ st }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+    {% if p.attendance_id %}
+    <form method="post" action="/attendance/{{ p.attendance_id }}/cancel" style="margin-top:6px;"
+          onsubmit="return confirm('إلغاء تحضير هذا اللاعب؟ سيتم عكس خصم الحصة إن وُجد.');">
+      <button class="btn btn-sm btn-danger btn-block" type="submit">↺ إلغاء التحضير</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const sessionId = {{ ts.id }};
+const scanInput = document.getElementById("scan-input");
+const feedback = document.getElementById("scan-feedback");
+
+scanInput.addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  const code = scanInput.value.trim();
+  scanInput.value = "";
+  if (!code) return;
+  const res = await postJSON(`/attendance/session/${sessionId}/scan`, { code });
+  if (res.ok) {
+    toast(feedback, `${res.already ? "⚠️ " : "✅ "} ${res.player_name} — ${res.message} — المتبقي: ${res.remaining_total} حصة`, !res.already);
+    const card = document.getElementById("card-" + res.player_id);
+    if (card) {
+      card.className = "attend-card status-PRESENT";
+      card.querySelectorAll(".status-btn").forEach(b => b.classList.remove("active-PRESENT","active-LATE","active-ABSENT","active-EXCUSED"));
+      const presentBtn = card.querySelector('[data-status="PRESENT"]');
+      if (presentBtn) presentBtn.classList.add("active-PRESENT");
+      location.reload();
+    }
+  } else {
+    toast(feedback, "❌ " + res.message, false);
+  }
+});
+
+document.querySelectorAll(".status-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const playerId = btn.dataset.player;
+    const status = btn.dataset.status;
+    const res = await postJSON(`/attendance/session/${sessionId}/mark`, { player_id: playerId, status });
+    if (res.ok) {
+      const card = document.getElementById("card-" + playerId);
+      card.className = "attend-card status-" + status;
+      card.querySelectorAll(".status-btn").forEach(b => {
+        b.classList.remove("active-PRESENT","active-LATE","active-ABSENT","active-EXCUSED");
+      });
+      btn.classList.add("active-" + status);
+    } else {
+      alert(res.message);
+    }
+  });
+});
+</script>
+{% endblock %}

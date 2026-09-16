@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}لاعب جديد{% endblock %}
+{% block page_title %}تسجيل لاعب جديد{% endblock %}
+{% block content %}
+<div class="card" style="max-width:720px;">
+  <form method="post">
+    <div class="form-grid">
+      <div class="field"><label>الاسم الأول</label><input name="first_name" required></div>
+      <div class="field"><label>الاسم الأخير</label><input name="last_name" required></div>
+      <div class="field"><label>تاريخ الميلاد</label><input type="date" name="dob"></div>
+      <div class="field"><label>الجنس</label>
+        <select name="gender"><option value="M">ذكر</option><option value="F">أنثى</option></select></div>
+      <div class="field"><label>الفئة</label>
+        <select name="category_id" required>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }} ({{ c.min_age }}-{{ c.max_age }})</option>{% endfor %}</select></div>
+      <div class="field"><label>الفرع</label>
+        <select name="branch_id" required>{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>المجموعة</label>
+        <select name="group_id"><option value="">— بدون —</option>{% for gr in groups %}<option value="{{ gr.id }}">{{ gr.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>المدرب</label>
+        <select name="coach_id"><option value="">— بدون —</option>{% for c in coaches %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>نوع اللاعب</label>
+        <select name="player_type"><option value="FOUQ">فوق (عضوية جديدة)</option><option value="LEGACY">لاعب سابق (نادي تواصل)</option></select></div>
+      <div class="field"><label>ولي أمر موجود</label>
+        <select name="parent_id"><option value="">— إنشاء ولي أمر جديد أدناه —</option>
+          {% for p in parents %}<option value="{{ p.id }}">{{ p.name }} — {{ p.phone }}</option>{% endfor %}</select></div>
+      <div class="field"><label>اسم ولي الأمر الجديد (اختياري)</label><input name="parent_name"></div>
+      <div class="field"><label>جوال ولي الأمر الجديد</label><input name="parent_phone"></div>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">حفظ وإنشاء اللاعب</button>
+  </form>
+</div>
+{% endblock %}

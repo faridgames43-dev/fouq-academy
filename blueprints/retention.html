@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}مركز الاحتفاظ{% endblock %}
+{% block page_title %}مركز إجراءات الاحتفاظ (Retention Action Center){% endblock %}
+{% block content %}
+{% macro plist(players, key='') %}
+  {% if players %}
+  <ul style="margin-top:8px;">
+    {% for p in players %}<li><a href="/players/{{ p.id }}">{{ p.first_name }} {{ p.last_name }}</a>
+      {% if key and p[key] is defined %} — {{ p[key] }}{% endif %}</li>{% endfor %}
+  </ul>
+  {% else %}<p class="muted" style="margin-top:8px;">لا يوجد</p>{% endif %}
+{% endmacro %}
+<div class="grid grid-3">
+  <div class="card"><h3>لم يحضر آخر 14 يوم</h3>{{ plist(not_attended_14d) }}</div>
+  <div class="card"><h3>انخفض حضوره (أقل من 50٪ آخر أسبوعين)</h3>{{ plist(declining, 'recent_rate') }}</div>
+  <div class="card"><h3>اشتراكه سينتهي قريبًا</h3>{{ plist(expiring, 'end_date') }}</div>
+  <div class="card"><h3>تبقّى له قليل من الحصص (≤2)</h3>{{ plist(low_sessions, 'remaining') }}</div>
+  <div class="card"><h3>لديه حصص مستحقة لم يستخدمها</h3>{{ plist(unused_compensation, 'comp_remaining') }}</div>
+  <div class="card"><h3>لم يتم تقييمه أبدًا</h3>{{ plist(not_assessed) }}</div>
+  <div class="card"><h3>لم يجدد بعد انتهاء الاشتراك</h3>{{ plist(not_renewed, 'end_date') }}</div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}التقارير{% endblock %}
+{% block page_title %}مركز التقارير (One-Click Reports){% endblock %}
+{% block content %}
+<div class="grid grid-3">
+  {% for key, label in report_types %}
+  <div class="card">
+    <h3>{{ label }}</h3>
+    <div class="flex gap-8" style="margin-top:10px;">
+      <a class="btn btn-sm btn-outline" href="/reports/{{ key }}">عرض</a>
+      <a class="btn btn-sm btn-outline" href="/reports/{{ key }}?format=csv">CSV</a>
+      <a class="btn btn-sm btn-gold" href="/reports/{{ key }}?format=pdf" target="_blank">PDF</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

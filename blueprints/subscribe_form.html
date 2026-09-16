@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}اشتراك جديد{% endblock %}
+{% block page_title %}تجديد / اشتراك جديد — {{ player.first_name }} {{ player.last_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;">
+  {% if balances.COMPENSATION or balances.BONUS or balances.LEGACY %}
+  <div class="attention-card" style="margin-bottom:16px;">
+    <p style="margin:0;">تنبيه: لا داعي للتجديد فقط لاستخدام الحصص المستحقة — يملك اللاعب حاليًا
+      <b>{{ balances.COMPENSATION + balances.BONUS + balances.LEGACY }}</b> حصة مستحقة يمكنه استخدامها بشكل مستقل عن الاشتراك.
+      عند التجديد ستبقى هذه الحصص محفوظة ومنفصلة محاسبيًا ولن تُفقد.</p>
+  </div>
+  {% endif %}
+  <form method="post">
+    <div class="form-grid">
+      <div class="field"><label>الباقة</label>
+        <select name="package_id" id="pkg" required>
+          {% for p in packages %}<option value="{{ p.id }}" data-price="{{ p.price }}">{{ p.name }} — {{ p.sessions_count }} حصة / {{ p.duration_days }} يوم — {{ p.price }} ر.س</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field"><label>تاريخ البداية</label><input type="date" name="start_date" value="{{ moment if moment else '' }}" required></div>
+      <div class="field"><label>السعر</label><input type="number" step="0.01" name="price" id="price"></div>
+      <div class="field"><label>الخصم</label><input type="number" step="0.01" name="discount" value="0"></div>
+      <div class="field"><label>المبلغ المدفوع الآن</label><input type="number" step="0.01" name="paid_amount"></div>
+      <div class="field"><label>طريقة الدفع</label>
+        <select name="payment_method"><option value="CASH">نقدًا</option><option value="MADA">مدى</option><option value="TRANSFER">تحويل بنكي</option></select></div>
+      <div class="field"><label>رقم الفاتورة/المرجع</label><input name="invoice_ref"></div>
+      <div class="field"><label>ملاحظة</label><input name="note"></div>
+    </div>
+    <button class="btn btn-gold btn-block" type="submit">تأكيد الاشتراك</button>
+  </form>
+</div>
+<script>
+document.getElementById('pkg').addEventListener('change', function(){
+  document.getElementById('price').value = this.selectedOptions[0].dataset.price;
+});
+window.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('price').value = document.getElementById('pkg').selectedOptions[0].dataset.price;
+  document.querySelector('input[name=start_date]').value = new Date().toISOString().slice(0,10);
+});
+</script>
+{% endblock %}

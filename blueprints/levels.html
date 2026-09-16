@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}المستويات{% endblock %}
+{% block page_title %}مستويات فوق{% endblock %}
+{% block content %}
+<div class="grid grid-3">
+  {% for lv in levels %}
+  <div class="card">
+    <div class="card-title">المستوى {{ lv.level_order }}</div>
+    <h2>{{ lv.name }}</h2>
+    <p class="muted">{{ lv.description }}</p>
+    <div style="font-size:12px;">الحد الأدنى: حضور {{ lv.min_attendance_rate }}٪ · تقييم عام {{ lv.min_overall_score }} · انضباط {{ lv.min_discipline_score }}</div>
+    <div class="kpi-value" style="margin-top:8px;">{{ lv.players_count }}</div>
+    <div class="kpi-sub">لاعب في هذا المستوى حاليًا</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

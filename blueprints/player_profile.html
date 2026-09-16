@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}{{ player.first_name }} {{ player.last_name }}{% endblock %}
+{% block page_title %}ملف اللاعب{% endblock %}
+{% block content %}
+
+<div class="hub-hero section">
+  <div class="avatar" style="width:72px;height:72px;font-size:26px;background:var(--gold);color:#241a02;">{{ player.first_name[0] }}</div>
+  <div style="flex:1;">
+    <span class="level-chip">{{ level.name if level else 'الانطلاقة' }}</span>
+    <h1>{{ player.first_name }} {{ player.last_name }}</h1>
+    <div class="muted" style="color:#cfd9ea;">{{ player.player_code }} · {{ player.category_name }} · {{ player.group_name or 'بدون مجموعة' }} · المدرب: {{ player.coach_name or '-' }}</div>
+  </div>
+  <img src="/players/{{ player.id }}/barcode.png" alt="Barcode" style="background:#fff;padding:6px;border-radius:8px;">
+  <div class="points-chip">⭐ {{ pts_balance }} رصيد فوق</div>
+</div>
+
+<div class="section grid grid-4">
+  <div class="card">
+    <div class="card-title">حالة الاشتراك</div>
+    {% set s = subs_history[0].status if subs_history else 'NO_SUB' %}
+    <div>{% if s=='ACTIVE' %}<span class="badge badge-green">نشط</span>{% elif s=='EXPIRING_SOON' %}<span class="badge badge-amber">ينتهي قريبًا</span>{% elif s=='EXPIRED' %}<span class="badge badge-red">منتهٍ</span>{% elif s=='FROZEN' %}<span class="badge badge-blue">مجمّد</span>{% else %}<span class="badge badge-gray">لا يوجد</span>{% endif %}</div>
+    {% if subs_history %}<div class="kpi-sub">ينتهي: {{ subs_history[0].end_date }}</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-title">الأهلية للحضور</div>
+    <div>{% set e=eligibility.code %}
+      {% if e=='ELIGIBLE' %}<span class="badge badge-green">مؤهل للحضور</span>
+      {% elif e=='COMPENSATION_ONLY' %}<span class="badge badge-amber">استكمال حصص مستحقة</span>
+      {% elif e=='NO_SESSIONS' %}<span class="badge badge-red">يحتاج تجديد</span>
+      {% elif e=='SUSPENDED' %}<span class="badge badge-gray">مجمّد</span>
+      {% else %}<span class="badge badge-purple">صلاحية إدارية</span>{% endif %}</div>
+    <div class="kpi-sub">{{ eligibility.detail }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">الحصص المتاحة</div>
+    <div class="kpi-value">{{ balances.TOTAL }}</div>
+    <div class="kpi-sub">أساسية {{ balances.REGULAR }} · تعويضية {{ balances.COMPENSATION }} · إضافية {{ balances.BONUS }}{% if balances.LEGACY %} · سابقة {{ balances.LEGACY }}{% endif %}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">نسبة الحضور / مخاطر عدم التجديد</div>
+    <div class="kpi-value">{{ attendance_pct }}٪</div>
+    <div class="kpi-sub">مخاطر التجديد:
+      {% if risk.level=='HIGH' %}<span class="badge badge-red">مرتفعة</span>{% elif risk.level=='MEDIUM' %}<span class="badge badge-amber">متوسطة</span>{% else %}<span class="badge badge-green">منخفضة</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="section flex flex-wrap gap-8">
+  <a class="btn btn-gold" href="/players/{{ player.id }}/subscribe">🔁 تجديد / اشتراك جديد</a>
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+  <a class="btn btn-outline" href="/players/{{ player.id }}/compensation/add">➕ إضافة حصص تعويضية</a>
+  <a class="btn btn-outline" href="/players/{{ player.id }}/points/add">⭐ إضافة رصيد فوق</a>
+  {% endif %}
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR','COACH'] %}
+  <a class="btn btn-outline" href="/players/{{ player.id }}/assess">📝 تقييم اللاعب</a>
+  {% endif %}
+  <a class="btn btn-outline" href="/reports/player/{{ player.id }}/pdf" target="_blank">🧾 تقرير PDF</a>
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+  <form method="post" action="/players/{{ player.id }}/override" style="display:inline;">
+    <input type="hidden" name="note" value="سمحت الإدارة بالحضور استثنائيًا">
+    <button class="btn {{ 'btn-danger' if player.attendance_override else 'btn-outline' }}" type="submit">
+      {{ '❌ إلغاء الصلاحية الإدارية' if player.attendance_override else '🛂 منح صلاحية حضور إدارية' }}
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{% if player.player_type == 'LEGACY' %}
+<div class="section">
+  <div class="attention-card">
+    <h2>لاعب من نادي تواصل الرياضي (Legacy)</h2>
+    <p class="muted">لا يحصل تلقائيًا على مزايا عضوية فوق المدفوعة حتى إتمام تسجيله كعضو فوق.</p>
+    {% if player.status == 'CONVERSION_PENDING' %}
+      <p><span class="badge badge-amber">اكتملت الحصص السابقة — مؤهل للانتقال إلى فوق</span></p>
+      <a class="btn btn-gold" href="/players/{{ player.id }}/subscribe">تحويله لعضوية فوق الآن</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if onboarding %}
+<div class="section">
+  <div class="card">
+    <div class="card-title">اكتمال تجربة أول يوم (Onboarding)</div>
+    <div class="progress-bar" style="margin:8px 0;"><span style="width:{{ onboarding_pct }}%;"></span></div>
+    <div class="kpi-sub">{{ onboarding_pct }}٪ مكتمل</div>
+    <ul style="margin-top:8px; font-size:12.5px;">
+      {% for k, v in onboarding.items() %}
+        <li>{{ '✅' if v else '⬜' }} {{ k }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+<div class="section grid grid-2">
+  <div class="card">
+    <div class="card-title">التطور — أحدث تقييم</div>
+    {% if dev_timeline %}
+      {% set last = dev_timeline[-1] %}
+      <div class="kpi-value">{{ last.overall or '-' }}<span style="font-size:13px;color:var(--text-dim);"> / 100</span></div>
+      <div class="kpi-sub">للطفل: <b>{{ child_label(last.overall or 0) }}</b></div>
+      <table style="margin-top:10px; width:100%; font-size:12.5px;">
+        {% for code, label in [('SKILL','المهاري'),('FITNESS','اللياقي'),('BEHAVIOR','السلوكي'),('DISCIPLINE','الانضباط')] %}
+        <tr><td>{{ label }}</td><td style="width:60%;"><div class="progress-bar"><span style="width:{{ last.breakdown[code] or 0 }}%;"></span></div></td><td>{{ last.breakdown[code] or '-' }}</td></tr>
+        {% endfor %}
+      </table>
+    {% else %}<p class="muted">لا يوجد تقييم بعد</p>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-title">المستوى والترقية</div>
+    {% if readiness and not readiness.at_max %}
+      <div class="flex items-center gap-12">
+        <div class="progress-ring">
+          <svg width="84" height="84"><circle cx="42" cy="42" r="36" stroke="#e6e9f2" stroke-width="9" fill="none"/>
+          <circle cx="42" cy="42" r="36" stroke="#cf931e" stroke-width="9" fill="none"
+            stroke-dasharray="{{ (readiness.readiness_pct/100*226)|round(1) }} 226" stroke-linecap="round"/></svg>
+          <div class="ring-value">{{ readiness.readiness_pct }}٪</div>
+        </div>
+        <div>
+          <div>المستوى القادم: <b>{{ readiness.next_level.name }}</b></div>
+          {% if readiness.missing %}
+            <ul style="font-size:12px; margin-top:4px;">{% for m in readiness.missing %}<li>{{ m }}</li>{% endfor %}</ul>
+          {% else %}<div class="badge badge-green" style="margin-top:6px;">جاهز للترقية ✓</div>{% endif %}
+        </div>
+      </div>
+      {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+      <form method="post" action="/players/{{ player.id }}/promote" style="margin-top:10px;">
+        <button class="btn btn-gold btn-sm" type="submit">اعتماد الترقية للمستوى {{ readiness.next_level.name }}</button>
+      </form>
+      {% endif %}
+    {% else %}<p class="muted">اللاعب في أعلى مستوى حاليًا 🏆</p>{% endif %}
+  </div>
+</div>
+
+<div class="section">
+  <div class="card-title">الإنجازات</div>
+  <div class="flex flex-wrap gap-8" style="margin-top:8px;">
+    {% for a in achievements %}
+      <span class="achievement-chip">{{ a.icon }} {{ a.name }}</span>
+    {% else %}<span class="muted">لم يحقق إنجازات بعد</span>{% endfor %}
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><h2>سجل الاشتراكات (Subscription History)</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>الباقة</th><th>من</th><th>إلى</th><th>السعر</th><th>الدفع</th><th>الحالة</th></tr></thead>
+    <tbody>
+    {% for s in subs_history %}
+      <tr><td>{{ s.package_name_snapshot }}</td><td>{{ s.start_date }}</td><td>{{ s.end_date }}</td>
+        <td>{{ s.price }} ر.س</td>
+        <td>{% if s.payment_status=='PAID' %}<span class="badge badge-green">مدفوع</span>{% elif s.payment_status=='PARTIALLY_PAID' %}<span class="badge badge-amber">جزئي</span>{% else %}<span class="badge badge-red">غير مدفوع</span>{% endif %}</td>
+        <td>{{ s.status }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">لا يوجد اشتراكات</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="section">
+  <div class="section-header"><h2>سجل حركة الحصص (Session Ledger)</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>التاريخ</th><th>الإجراء</th><th>النوع</th><th>الكمية</th><th>السبب</th></tr></thead>
+    <tbody>
+    {% for l in ledger %}
+      <tr><td>{{ l.created_at }}</td><td>{{ {'GRANT':'منح','ATTENDANCE_DEDUCT':'خصم حضور','ATTENDANCE_REVERSE':'عكس خصم','EXPIRE':'انتهاء صلاحية','ADMIN_ADJUST':'تعديل إداري','CANCEL':'إلغاء'}[l.action] }}</td>
+        <td>{{ l.entitlement_type }}</td>
+        <td style="color: {{ 'var(--green)' if l.quantity > 0 else 'var(--red)' }};">{{ '+' if l.quantity>0 else '' }}{{ l.quantity }}</td>
+        <td>{{ l.reason }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">لا يوجد حركات</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="section grid grid-2">
+  <div>
+    <div class="section-header"><h2>سجل الحضور</h2></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>التاريخ</th><th>المجموعة</th><th>الحالة</th></tr></thead>
+      <tbody>
+      {% for a in attendance_hist %}
+        <tr><td>{{ a.session_date }}</td><td>{{ a.group_name }}</td>
+          <td><span class="badge {{ {'PRESENT':'badge-green','LATE':'badge-amber','ABSENT':'badge-red','EXCUSED':'badge-blue','FROZEN':'badge-gray'}[a.status] }}">{{ {'PRESENT':'حاضر','LATE':'متأخر','ABSENT':'غائب','EXCUSED':'بعذر','FROZEN':'مجمّد'}[a.status] }}</span></td></tr>
+      {% else %}<tr><td colspan="3" class="muted">لا يوجد سجل حضور</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <div>
+    <div class="section-header"><h2>سجل رصيد فوق</h2></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>التاريخ</th><th>الكمية</th><th>السبب</th><th>الرصيد بعدها</th></tr></thead>
+      <tbody>
+      {% for t in pts_hist %}
+        <tr><td>{{ t.created_at }}</td><td style="color: {{ 'var(--green)' if t.amount > 0 else 'var(--red)' }};">{{ '+' if t.amount>0 else '' }}{{ t.amount }}</td><td>{{ t.reason }}</td><td>{{ t.balance_after }}</td></tr>
+      {% else %}<tr><td colspan="4" class="muted">لا يوجد حركات</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><h2>ملاحظات</h2></div>
+  <div class="card">
+    <p>{{ player.notes or 'لا توجد ملاحظات' }}</p>
+    {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR','COACH'] %}
+    <form method="post" action="/players/{{ player.id }}/note" style="margin-top:10px;">
+      <textarea name="notes" rows="3" style="width:100%; border-radius:10px; border:1px solid var(--border); padding:8px;">{{ player.notes or '' }}</textarea>
+      <button class="btn btn-sm btn-primary" style="margin-top:6px;" type="submit">حفظ الملاحظة</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
