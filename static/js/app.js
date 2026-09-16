@@ -1,4 +1,4 @@
-tatic/js/app.js// Small, dependency-free helpers shared across pages.
+// Small, dependency-free helpers shared across pages.
 
 async function postJSON(url, data) {
   const res = await fetch(url, {
