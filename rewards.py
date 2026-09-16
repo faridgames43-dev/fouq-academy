@@ -1,0 +1,67 @@
+"""متجر فوق (Reward Store). Points & stock are reserved at request time and
+correctly restored on cancellation (Transaction Reversal), never fudged."""
+from db import q, q1, ex
+from business.points import award_points, get_balance, PointsError
+from business.audit import log as audit_log
+
+
+class RewardError(Exception):
+    pass
+
+
+def list_rewards(conn, active_only=True):
+    sql = "SELECT * FROM rewards"
+    if active_only:
+        sql += " WHERE active=1"
+    sql += " ORDER BY cost ASC"
+    return q(conn, sql)
+
+
+def request_redemption(conn, player_id, reward_id, user_id):
+    reward = q1(conn, "SELECT * FROM rewards WHERE id=?", (reward_id,))
+    if not reward or not reward["active"]:
+        raise RewardError("الجائزة غير متاحة")
+    if reward["stock"] <= 0:
+        raise RewardError("المخزون غير متوفر لهذه الجائزة")
+    balance = get_balance(conn, player_id)
+    if balance < reward["cost"]:
+        raise RewardError("رصيد فوق غير كافٍ لاستبدال هذه الجائزة")
+
+    new_balance = award_points(conn, player_id, -reward["cost"], f"استبدال جائزة: {reward['name']}",
+                                "REDEMPTION", user_id)
+    ex(conn, "UPDATE rewards SET stock = stock - 1 WHERE id=?", (reward_id,))
+    redemption_id = ex(
+        conn,
+        """INSERT INTO reward_redemptions(player_id, reward_id, status) VALUES (?,?,'PENDING')""",
+        (player_id, reward_id),
+    )
+    ptx = q1(conn, "SELECT id FROM points_transactions WHERE player_id=? ORDER BY id DESC LIMIT 1", (player_id,))
+    if ptx:
+        ex(conn, "UPDATE reward_redemptions SET points_transaction_id=? WHERE id=?", (ptx["id"], redemption_id))
+    audit_log(conn, user_id, "REQUEST_REDEMPTION", "reward_redemptions", redemption_id,
+              after={"player_id": player_id, "reward": reward["name"], "cost": reward["cost"]})
+    return redemption_id
+
+
+def update_redemption_status(conn, redemption_id, new_status, user_id):
+    red = q1(conn, "SELECT * FROM reward_redemptions WHERE id=?", (redemption_id,))
+    if not red:
+        raise RewardError("الطلب غير موجود")
+    if new_status == "CANCELLED" and red["status"] != "CANCELLED":
+        reward = q1(conn, "SELECT * FROM rewards WHERE id=?", (red["reward_id"],))
+        award_points(conn, red["player_id"], reward["cost"], f"إلغاء استبدال: {reward['name']}",
+                      "REDEMPTION", user_id)
+        ex(conn, "UPDATE rewards SET stock = stock + 1 WHERE id=?", (red["reward_id"],))
+    ex(conn, "UPDATE reward_redemptions SET status=?, decided_by=?, decided_at=datetime('now') WHERE id=?",
+       (new_status, user_id, redemption_id))
+    audit_log(conn, user_id, "UPDATE_REDEMPTION", "reward_redemptions", redemption_id,
+              before={"status": red["status"]}, after={"status": new_status})
+
+
+def player_redemptions(conn, player_id):
+    return q(
+        conn,
+        """SELECT rr.*, r.name, r.photo_url, r.cost FROM reward_redemptions rr
+           JOIN rewards r ON r.id = rr.reward_id WHERE rr.player_id=? ORDER BY rr.id DESC""",
+        (player_id,),
+    )
