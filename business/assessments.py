@@ -1,4 +1,4 @@
-usiness/assessments.py"""Player Development System: Skill / Fitness / Behavior / Discipline.
+"""Player Development System: Skill / Fitness / Behavior / Discipline.
 Assessment vs Gamification vs Rewards Currency are kept strictly separate -
 FOUQ Points never influence the technical rating."""
 from db import q, q1, ex
