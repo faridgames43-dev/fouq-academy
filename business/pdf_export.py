@@ -199,25 +199,37 @@ def _draw_footer(c, width, generated_at=None):
 
 
 def _kv_table(c, y, width, rows, col_widths=None):
-    """rows: list of (label, value, label2, value2) 4-tuples, RTL-friendly."""
+    """rows: list of (label, value, label2, value2, ...) tuples, given in
+    natural reading order (the first pair is meant to be read first).
+
+    reportlab always draws column 0 on the left regardless of the text
+    inside it, so for Arabic (read right-to-left) we must reverse the
+    column order before building the table: that puts the first pair on
+    the right (where an Arabic reader looks first) and preserves each
+    label immediately next to its own value."""
     regular, bold = ensure_fonts()
+    n = len(rows[0])
     data = []
     for row in rows:
-        data.append([ar(fmt_val(v)) for v in row])
-    n = len(rows[0])
+        rtl_row = list(row)[::-1]
+        data.append([ar(fmt_val(v)) for v in rtl_row])
     if not col_widths:
         col_widths = [(width - 80) / n] * n
+    else:
+        col_widths = list(col_widths)[::-1]
     t = Table(data, colWidths=col_widths)
     style = [
         ("FONT", (0, 0), (-1, -1), regular, 9.5),
         ("GRID", (0, 0), (-1, -1), 0.6, BORDER),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f4f6fb")),
-        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f4f6fb")) if n >= 3 else ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f4f6fb")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]
+    # Label columns were originally at even indices (0, 2, ...); after the
+    # reversal above they land on the odd indices instead.
+    for i in range(1, n, 2):
+        style.append(("BACKGROUND", (i, 0), (i, -1), colors.HexColor("#f4f6fb")))
     t.setStyle(TableStyle(style))
     tw, th = t.wrapOn(c, width - 80, 800)
     t.drawOn(c, 40, y - th)
