@@ -29,7 +29,7 @@
       <tr>
         <td>
           <div class="player-card" style="padding:4px 0;">
-            <div class="avatar">{{ p.first_name[0] }}</div>
+            <div class="avatar">{% if p.photo_url %}<img src="{{ p.photo_url }}" alt="">{% else %}{{ p.first_name[0] }}{% endif %}</div>
             <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div></div>
           </div>
         </td>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>شاشة التحضير · {{ ts.group_name }} · أكاديمية فوق</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body style="background:var(--navy-900);">
+<div class="tv-screen">
+  <a class="btn btn-outline btn-sm tv-back" href="/attendance/session/{{ ts.id }}">← رجوع</a>
+  <div class="tv-count" id="tv-count">✅ 0 حاضر</div>
+
+  <div class="tv-header">
+    <img class="tv-logo" src="{{ url_for('static', filename='img/logo_white.png') }}" alt="FOUQ">
+    <h1>{{ ts.group_name }}</h1>
+    <div class="tv-sub">امسح الباركود لتسجيل الحضور تلقائيًا ⚡</div>
+  </div>
+
+  <input id="scan-input" class="tv-scan-input" type="text" autocomplete="off"
+         placeholder="👉 امسح الباركود الآن…">
+
+  <div id="tv-idle" class="tv-idle">
+    <span class="emoji">🥅</span>
+    بانتظار أول لاعب… جاهزون؟
+  </div>
+
+  <div id="tv-reveal" class="tv-reveal" style="display:none;">
+    <div class="tv-avatar" id="tv-avatar"></div>
+    <div class="tv-name" id="tv-name"></div>
+    <div class="tv-code" id="tv-code"></div>
+    <div class="tv-stats">
+      <div class="tv-stat"><div class="v" id="tv-points">-</div><div class="l">⭐ رصيد فوق</div></div>
+      <div class="tv-stat"><div class="v" id="tv-level">-</div><div class="l">🏆 المستوى</div></div>
+      <div class="tv-stat"><div class="v" id="tv-remaining">-</div><div class="l">📅 حصص متبقية</div></div>
+    </div>
+    <div class="tv-message" id="tv-message"></div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+const sessionId = {{ ts.id }};
+const scanInput = document.getElementById("scan-input");
+const idleBox = document.getElementById("tv-idle");
+const reveal = document.getElementById("tv-reveal");
+const countEl = document.getElementById("tv-count");
+let presentCount = 0;
+let hideTimer = null;
+
+scanInput.focus();
+document.addEventListener("click", () => scanInput.focus());
+
+scanInput.addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  const code = scanInput.value.trim();
+  scanInput.value = "";
+  if (!code) return;
+  const res = await postJSON(`/attendance/session/${sessionId}/scan`, { code });
+  showReveal(res);
+});
+
+function showReveal(res) {
+  clearTimeout(hideTimer);
+  idleBox.style.display = "none";
+  reveal.style.display = "block";
+  reveal.className = "tv-reveal " + (res.ok ? "" : "err");
+
+  if (res.ok) {
+    const avatar = document.getElementById("tv-avatar");
+    avatar.innerHTML = res.photo_url ? `<img src="${res.photo_url}" alt="">` : (res.player_name ? res.player_name[0] : "🧒");
+    document.getElementById("tv-name").textContent = res.player_name || "";
+    document.getElementById("tv-code").textContent = res.player_code || "";
+    document.getElementById("tv-points").textContent = res.points ?? "-";
+    document.getElementById("tv-level").textContent = res.level_name || "-";
+    document.getElementById("tv-remaining").textContent = res.remaining_total ?? "-";
+    const msg = document.getElementById("tv-message");
+    msg.textContent = res.already ? "⚠️ تم تسجيله مسبقًا" : "✅ تم تسجيل الحضور بنجاح!";
+    msg.className = "tv-message " + (res.already ? "err" : "ok");
+    if (!res.already) {
+      presentCount++;
+      countEl.textContent = `✅ ${presentCount} حاضر`;
+      confettiBurst(30);
+    }
+  } else {
+    document.getElementById("tv-avatar").innerHTML = "❌";
+    document.getElementById("tv-name").textContent = "لم يتم العثور على اللاعب";
+    document.getElementById("tv-code").textContent = "";
+    document.getElementById("tv-points").textContent = "-";
+    document.getElementById("tv-level").textContent = "-";
+    document.getElementById("tv-remaining").textContent = "-";
+    const msg = document.getElementById("tv-message");
+    msg.textContent = "❌ " + (res.message || "خطأ");
+    msg.className = "tv-message err";
+  }
+
+  hideTimer = setTimeout(() => {
+    reveal.style.display = "none";
+    idleBox.style.display = "block";
+    scanInput.focus();
+  }, 4500);
+}
+</script>
+</body>
+</html>

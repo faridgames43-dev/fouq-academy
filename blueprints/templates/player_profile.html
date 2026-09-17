@@ -4,11 +4,19 @@
 {% block content %}
 
 <div class="hub-hero section">
-  <div class="avatar" style="width:72px;height:72px;font-size:26px;background:var(--gold);color:#241a02;">{{ player.first_name[0] }}</div>
+  <div class="avatar" style="width:72px;height:72px;font-size:26px;background:var(--gold);color:#241a02;" id="hero-avatar">
+    {% if player.photo_url %}<img src="{{ player.photo_url }}" alt="">{% else %}{{ player.first_name[0] }}{% endif %}
+  </div>
   <div style="flex:1;">
     <span class="level-chip">{{ level.name if level else 'الانطلاقة' }}</span>
     <h1>{{ player.first_name }} {{ player.last_name }}</h1>
     <div class="muted" style="color:#cfd9ea;">{{ player.player_code }} · {{ player.category_name }} · {{ player.group_name or 'بدون مجموعة' }} · المدرب: {{ player.coach_name or '-' }}</div>
+    {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+    <form method="post" action="/players/{{ player.id }}/photo" enctype="multipart/form-data" style="margin-top:6px;">
+      <label class="btn btn-sm btn-outline" for="hero-photo-input" style="cursor:pointer;">📷 تغيير الصورة</label>
+      <input id="hero-photo-input" type="file" name="photo" accept="image/*" style="display:none;" onchange="this.form.submit()">
+    </form>
+    {% endif %}
   </div>
   <img src="/players/{{ player.id }}/barcode.png" alt="Barcode" style="background:#fff;padding:6px;border-radius:8px;">
   <div class="points-chip">⭐ {{ pts_balance }} رصيد فوق</div>
@@ -188,11 +196,20 @@
   <div>
     <div class="section-header"><h2>سجل رصيد فوق</h2></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>التاريخ</th><th>الكمية</th><th>السبب</th><th>الرصيد بعدها</th></tr></thead>
+      <thead><tr><th>التاريخ</th><th>الكمية</th><th>السبب</th><th>الرصيد بعدها</th><th></th></tr></thead>
       <tbody>
       {% for t in pts_hist %}
-        <tr><td>{{ t.created_at }}</td><td style="color: {{ 'var(--green)' if t.amount > 0 else 'var(--red)' }};">{{ '+' if t.amount>0 else '' }}{{ t.amount }}</td><td>{{ t.reason }}</td><td>{{ t.balance_after }}</td></tr>
-      {% else %}<tr><td colspan="4" class="muted">لا يوجد حركات</td></tr>{% endfor %}
+        <tr><td>{{ t.created_at }}</td><td style="color: {{ 'var(--green)' if t.amount > 0 else 'var(--red)' }};">{{ '+' if t.amount>0 else '' }}{{ t.amount }}</td><td>{{ t.reason }}</td><td>{{ t.balance_after }}</td>
+          <td>
+            {% if t.category != 'REVERSAL' and current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+            <form class="txn-cancel-form" method="post" action="/players/{{ player.id }}/points/{{ t.id }}/cancel"
+                  onsubmit="return confirm('إلغاء هذه العملية؟ سيتم عكس الرصيد.');">
+              <button class="btn btn-sm btn-danger" type="submit">↺ إلغاء</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}<tr><td colspan="5" class="muted">لا يوجد حركات</td></tr>{% endfor %}
       </tbody>
     </table></div>
   </div>

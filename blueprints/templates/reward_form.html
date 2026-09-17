@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ 'تعديل منتج' if reward else 'منتج جديد' }}{% endblock %}
+{% block page_title %}{{ 'تعديل منتج في متجر فوق' if reward else 'إضافة منتج جديد لمتجر فوق 🎁' }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px;">
+  <form method="post" enctype="multipart/form-data">
+    <div class="photo-upload">
+      <div class="preview" id="reward-photo-preview">
+        {% if reward and reward.photo_url %}<img src="{{ reward.photo_url }}" alt="">{% else %}🎁{% endif %}
+      </div>
+      <div>
+        <label class="btn btn-outline btn-sm" for="reward-photo-input">اختيار صورة المنتج</label>
+        <input id="reward-photo-input" type="file" name="photo" accept="image/*" data-preview="#reward-photo-preview">
+        <div class="field-hint">اختياري — JPG أو PNG</div>
+      </div>
+    </div>
+    <div class="field"><label>اسم المنتج</label><input name="name" value="{{ reward.name if reward else '' }}" required></div>
+    <div class="field"><label>الوصف</label><textarea name="description" rows="3">{{ reward.description if reward else '' }}</textarea></div>
+    <div class="form-grid">
+      <div class="field"><label>التكلفة (⭐ رصيد فوق)</label><input type="number" name="cost" min="1" value="{{ reward.cost if reward else '' }}" required></div>
+      <div class="field"><label>المخزون</label><input type="number" name="stock" min="0" value="{{ reward.stock if reward else 0 }}" required></div>
+    </div>
+    {% if reward %}
+    <div class="checkbox-row" style="margin-bottom:14px;">
+      <input type="checkbox" name="active" id="active" {% if reward.active %}checked{% endif %}>
+      <label for="active">مفعّل ومتاح في المتجر</label>
+    </div>
+    {% endif %}
+    <button class="btn btn-primary btn-block" type="submit">{{ 'حفظ التعديلات' if reward else 'إضافة المنتج' }}</button>
+  </form>
+</div>
+{% endblock %}

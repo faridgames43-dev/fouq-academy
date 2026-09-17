@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% block title %}لاعب جديد{% endblock %}
-{% block page_title %}تسجيل لاعب جديد{% endblock %}
+{% block page_title %}تسجيل لاعب جديد 🧒⚽{% endblock %}
 {% block content %}
 <div class="card" style="max-width:720px;">
-  <form method="post">
+  <form method="post" enctype="multipart/form-data">
+    <div class="photo-upload">
+      <div class="preview" id="photo-preview">📷</div>
+      <div>
+        <label class="btn btn-outline btn-sm" for="photo-input">اختيار صورة اللاعب</label>
+        <input id="photo-input" type="file" name="photo" accept="image/*" data-preview="#photo-preview">
+        <div class="field-hint">اختياري — JPG أو PNG</div>
+      </div>
+    </div>
     <div class="form-grid">
       <div class="field"><label>الاسم الأول</label><input name="first_name" required></div>
       <div class="field"><label>الاسم الأخير</label><input name="last_name" required></div>
@@ -20,13 +28,18 @@
         <select name="coach_id"><option value="">— بدون —</option>{% for c in coaches %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
       <div class="field"><label>نوع اللاعب</label>
         <select name="player_type"><option value="FOUQ">فوق (عضوية جديدة)</option><option value="LEGACY">لاعب سابق (نادي تواصل)</option></select></div>
+      <div class="field">
+        <label>الحصص السابقة (اختياري)</label>
+        <input type="number" name="previous_sessions" min="0" value="0" placeholder="0">
+        <div class="field-hint">إن كان لدى اللاعب حصص مستحقة من قبل، اكتب عددها هنا وستُضاف لرصيده تلقائيًا</div>
+      </div>
       <div class="field"><label>ولي أمر موجود</label>
         <select name="parent_id"><option value="">— إنشاء ولي أمر جديد أدناه —</option>
           {% for p in parents %}<option value="{{ p.id }}">{{ p.name }} — {{ p.phone }}</option>{% endfor %}</select></div>
       <div class="field"><label>اسم ولي الأمر الجديد (اختياري)</label><input name="parent_name"></div>
       <div class="field"><label>جوال ولي الأمر الجديد</label><input name="parent_phone"></div>
     </div>
-    <button class="btn btn-primary btn-block" type="submit">حفظ وإنشاء اللاعب</button>
+    <button class="btn btn-primary btn-block" type="submit">حفظ وإنشاء اللاعب 🚀</button>
   </form>
 </div>
 {% endblock %}

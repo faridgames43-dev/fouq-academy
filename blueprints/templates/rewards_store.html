@@ -5,6 +5,7 @@
 <div class="grid grid-4">
   {% for r in rewards %}
   <div class="reward-card">
+    <div class="reward-photo">{% if r.photo_url %}<img src="{{ r.photo_url }}" alt="">{% else %}🎁{% endif %}</div>
     <b>{{ r.name }}</b>
     <p class="muted" style="font-size:12px;">{{ r.description }}</p>
     <div class="cost">{{ r.cost }} ⭐</div>

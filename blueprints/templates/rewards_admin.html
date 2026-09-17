@@ -3,15 +3,17 @@
 {% block page_title %}إدارة متجر فوق والاستبدالات{% endblock %}
 {% block content %}
 <div class="section">
-  <div class="section-header"><h2>المنتجات</h2></div>
+  <div class="section-header"><h2>المنتجات</h2><a class="btn btn-gold btn-sm" href="/rewards/new">+ منتج جديد</a></div>
   <div class="grid grid-4">
     {% for r in rewards %}
     <div class="reward-card">
+      <div class="reward-photo">{% if r.photo_url %}<img src="{{ r.photo_url }}" alt="">{% else %}🎁{% endif %}</div>
       <b>{{ r.name }}</b>
       <div class="cost">{{ r.cost }} ⭐</div>
-      <div class="muted" style="font-size:12px;">المخزون: {{ r.stock }}</div>
+      <div class="muted" style="font-size:12px;">المخزون: {{ r.stock }} {% if not r.active %}· <span class="badge badge-gray">غير مفعّل</span>{% endif %}</div>
+      <a class="btn btn-sm btn-outline btn-block" style="margin-top:8px;" href="/rewards/{{ r.id }}/edit">✏️ تعديل</a>
     </div>
-    {% endfor %}
+    {% else %}<div class="muted">لا توجد منتجات بعد</div>{% endfor %}
   </div>
 </div>
 <div class="section">

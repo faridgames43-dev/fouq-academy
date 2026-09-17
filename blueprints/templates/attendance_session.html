@@ -12,6 +12,7 @@
 </div>
 
 <div class="section flex gap-8 flex-wrap">
+  <a class="btn btn-gold" href="/attendance/session/{{ ts.id }}/tv" target="_blank">📺 شاشة التحضير الكبيرة (TV)</a>
   <form method="post" action="/attendance/session/{{ ts.id }}/mark_all_present" onsubmit="return confirm('تحضير الجميع كحاضر؟ يمكنك تعديل الحالات الفردية بعدها.');">
     <button class="btn btn-outline" type="submit">✅ تحضير الجميع حاضر</button>
   </form>
@@ -25,7 +26,7 @@
   {% for p in roster %}
   <div class="attend-card status-{{ p.attendance_status or '' }}" id="card-{{ p.id }}" data-code="{{ p.player_code }}">
     <div class="player-card" style="padding:0;">
-      <div class="avatar">{{ p.first_name[0] }}</div>
+      <div class="avatar">{% if p.photo_url %}<img src="{{ p.photo_url }}" alt="">{% else %}{{ p.first_name[0] }}{% endif %}</div>
       <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div><small>{{ p.player_code }}</small></div>
     </div>
     <div class="status-buttons">
