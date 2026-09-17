@@ -260,3 +260,135 @@ tbody tr:hover { background: #fafbfe; }
   .topbar { padding: 10px 12px; }
   .topbar .search-box { display: none; }
 }
+
+/* =========================================================
+   GAME MODE — animations, glow, and sports-arena polish
+   ========================================================= */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes popIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+@keyframes pulseGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(207,147,30,.45); } 50% { box-shadow: 0 0 0 10px rgba(207,147,30,0); } }
+@keyframes shimmer { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
+@keyframes bounceIn { 0% { transform: scale(.3); opacity:0; } 50% { transform: scale(1.08); } 70% { transform: scale(.95); } 100% { transform: scale(1); opacity:1; } }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes spinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes confettiFall { 0% { transform: translateY(-20px) rotate(0deg); opacity:1; } 100% { transform: translateY(420px) rotate(540deg); opacity:0; } }
+@keyframes scorePulse { 0% { transform: scale(1); } 30% { transform: scale(1.35); color: var(--gold); } 100% { transform: scale(1); } }
+
+.section, .card, .reward-card, .attend-card, .achievement-chip, .hub-hero, .attention-card {
+  animation: fadeUp .45s ease both;
+}
+.card, .reward-card { transition: transform .18s ease, box-shadow .18s ease; }
+.card:hover, .reward-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.attend-card { transition: transform .15s ease; }
+.attend-card:hover { transform: translateY(-2px); }
+
+.nav-icon { display: inline-block; transition: transform .2s ease; }
+.sidebar a.nav-item:hover .nav-icon { transform: scale(1.25) rotate(-6deg); }
+.sidebar a.nav-item.active .nav-icon { animation: floaty 2.2s ease-in-out infinite; }
+
+.btn { position: relative; overflow: hidden; }
+.btn-gold, .btn-primary { animation: none; }
+.btn-gold:hover { animation: pulseGlow 1.4s infinite; }
+.btn:active { transform: scale(.94) !important; }
+
+.kpi-value { display: inline-block; }
+.kpi-value.bump { animation: scorePulse .5s ease; }
+
+.avatar { transition: transform .2s ease, box-shadow .2s ease; }
+.player-card:hover .avatar, .hub-hero .avatar { box-shadow: 0 0 0 4px rgba(207,147,30,.25); }
+.hub-hero .avatar { animation: bounceIn .6s ease; overflow: hidden; }
+.hub-hero { position: relative; overflow: hidden; }
+.hub-hero::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(circle at 85% -10%, rgba(207,147,30,.28), transparent 55%);
+  pointer-events: none;
+}
+
+.level-chip { display: inline-flex; align-items: center; gap: 4px; animation: popIn .4s ease; }
+.points-chip { animation: popIn .5s ease; }
+
+.achievement-chip { transition: transform .15s ease; }
+.achievement-chip:hover { transform: translateY(-3px) scale(1.05); }
+
+.badge-live { position: relative; }
+.badge-live::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--red); margin-left: 4px; animation: pulseGlow 1.2s infinite;
+}
+
+/* Loading shimmer skeleton (optional utility) */
+.shimmer { background: linear-gradient(90deg, #eef0f5 25%, #f6f7fb 37%, #eef0f5 63%); background-size: 400px 100%; animation: shimmer 1.4s infinite; }
+
+/* Confetti burst container */
+.confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden; }
+.confetti-piece {
+  position: absolute; top: -20px; width: 8px; height: 14px; opacity: .95;
+  animation: confettiFall 1.6s ease-in forwards;
+}
+
+/* ---------------- Player photo upload ---------------- */
+.photo-upload { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.photo-upload .preview {
+  width: 84px; height: 84px; border-radius: 50%; background: var(--bg); border: 2px dashed var(--border);
+  display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 28px; color: var(--text-dim);
+  flex-shrink: 0;
+}
+.photo-upload .preview img { width: 100%; height: 100%; object-fit: cover; }
+.photo-upload label.btn { cursor: pointer; }
+.photo-upload input[type="file"] { display: none; }
+
+/* ---------------- Reward product photo ---------------- */
+.reward-card { position: relative; }
+.reward-card .reward-photo {
+  width: 100%; height: 110px; border-radius: var(--radius-sm); background: var(--bg); overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 34px; margin-bottom: 8px;
+}
+.reward-card .reward-photo img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ---------------- TV Attendance Screen ---------------- */
+.tv-screen {
+  min-height: 100vh; background: radial-gradient(circle at 50% 0%, var(--navy-700), var(--navy-900) 70%);
+  color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  padding: 30px 24px 60px; position: relative; overflow: hidden;
+}
+.tv-screen::before {
+  content: ""; position: absolute; inset: 0; opacity: .5; pointer-events: none;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.02) 0 2px, transparent 2px 40px);
+}
+.tv-header { text-align: center; margin-bottom: 18px; z-index: 1; }
+.tv-header .tv-logo { width: 64px; margin-bottom: 6px; }
+.tv-header h1 { font-size: 26px; margin-bottom: 2px; }
+.tv-header .tv-sub { color: var(--gold-light); font-weight: 700; font-size: 14px; }
+.tv-scan-input {
+  width: min(560px, 92vw); padding: 18px 22px; font-size: 20px; border-radius: 16px; border: none;
+  text-align: center; z-index: 1; box-shadow: var(--shadow-lg);
+}
+.tv-idle { margin-top: 40px; text-align: center; color: #9fb0cc; font-size: 15px; z-index: 1; animation: floaty 3s ease-in-out infinite; }
+.tv-idle .emoji { font-size: 54px; display: block; margin-bottom: 10px; }
+.tv-reveal {
+  margin-top: 34px; width: min(520px, 92vw); background: linear-gradient(160deg, #fff, #f4f6fb);
+  color: var(--text); border-radius: 24px; padding: 28px 24px; text-align: center; z-index: 1;
+  box-shadow: 0 20px 60px rgba(0,0,0,.45); animation: bounceIn .5s ease;
+}
+.tv-reveal.err { background: linear-gradient(160deg, #fff3f2, #ffe1df); }
+.tv-reveal .tv-avatar {
+  width: 128px; height: 128px; border-radius: 50%; margin: 0 auto 14px; background: var(--navy-700); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 800; overflow: hidden;
+  border: 5px solid var(--gold); box-shadow: 0 0 0 6px rgba(207,147,30,.25);
+}
+.tv-reveal .tv-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.tv-reveal .tv-name { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+.tv-reveal .tv-code { color: var(--text-dim); font-size: 13px; margin-bottom: 14px; }
+.tv-reveal .tv-stats { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.tv-reveal .tv-stat { background: var(--bg); border-radius: 14px; padding: 10px 16px; min-width: 90px; }
+.tv-reveal .tv-stat .v { font-size: 20px; font-weight: 800; color: var(--navy-800); }
+.tv-reveal .tv-stat .l { font-size: 11px; color: var(--text-dim); }
+.tv-reveal .tv-message { font-weight: 700; margin-top: 6px; }
+.tv-reveal .tv-message.ok { color: var(--green); }
+.tv-reveal .tv-message.err { color: var(--red); }
+.tv-back { position: absolute; top: 16px; left: 16px; z-index: 2; }
+.tv-count { position: absolute; top: 16px; right: 16px; z-index: 2; color: var(--gold-light); font-weight: 700; font-size: 13px; }
+
+/* ---------------- Points history cancel button ---------------- */
+.txn-cancel-form { display: inline; }
+.txn-cancel-form button { padding: 3px 9px; font-size: 11px; }
