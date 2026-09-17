@@ -1,9 +1,11 @@
+import os
+import uuid
 from flask import Blueprint, render_template, request, redirect, g, flash, Response, abort
 from datetime import date
 from db import get_conn, q, q1, ex
 from business.rbac import login_required, permission_required, branch_scope, coach_group_ids, roles_required
 from business.subscriptions import get_attendance_eligibility, get_latest_subscription, sync_subscription_statuses
-from business.entitlements import get_balances, sync_expirations
+from business.entitlements import get_balances, sync_expirations, grant_entitlement
 from business.levels import current_level, promotion_readiness
 from business.points import get_balance as points_balance, get_history as points_history
 from business.assessments import player_development_timeline, child_label
@@ -13,6 +15,27 @@ from business.barcode import render_code39
 from business.audit import log as audit_log
 
 bp = Blueprint("players", __name__)
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "players")
+
+
+def _save_player_photo(file_storage, player_code):
+    """Resize/save an uploaded player photo. Returns the public URL path or None."""
+    if not file_storage or not file_storage.filename:
+        return None
+    try:
+        from PIL import Image
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        fname = f"{player_code}-{uuid.uuid4().hex[:8]}.jpg"
+        out_path = os.path.join(UPLOAD_DIR, fname)
+        img = Image.open(file_storage.stream)
+        img = img.convert("RGB")
+        img.thumbnail((500, 500))
+        img.save(out_path, "JPEG", quality=85)
+        return f"/static/uploads/players/{fname}"
+    except Exception:
+        return None
 
 
 def _scoped_player_query(base_sql, params, conn):
@@ -78,17 +101,25 @@ def new_player():
                       (f.get("parent_name"), f.get("parent_phone"), generate_password_hash("Fouq@2026"), "PARENT"))
             parent_id = ex(conn, "INSERT INTO parents(user_id, name, phone) VALUES (?,?,?)",
                            (uid, f.get("parent_name"), f.get("parent_phone")))
-        pid = ex(conn, """INSERT INTO players(player_code, first_name, last_name, dob, gender, category_id,
+        photo_url = _save_player_photo(request.files.get("photo"), code)
+        pid = ex(conn, """INSERT INTO players(player_code, first_name, last_name, photo_url, dob, gender, category_id,
                           branch_id, group_id, coach_id, player_type, join_date, referral_code, onboarding_json)
-                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                 (code, f.get("first_name"), f.get("last_name"), f.get("dob"), f.get("gender", "M"),
+                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 (code, f.get("first_name"), f.get("last_name"), photo_url, f.get("dob"), f.get("gender", "M"),
                   f.get("category_id"), f.get("branch_id"), f.get("group_id") or None, f.get("coach_id") or None,
                   f.get("player_type", "FOUQ"), date.today().isoformat(), f"REF-{code}",
                   '{"account_created": true, "parent_linked": true, "group_assigned": true}'))
         if parent_id:
             ex(conn, "INSERT INTO parent_players(parent_id, player_id) VALUES (?,?)", (parent_id, pid))
         ex(conn, "INSERT INTO points_wallets(player_id, balance) VALUES (?,0)", (pid,))
-        audit_log(conn, g.user["id"], "CREATE_PLAYER", "players", pid, after=dict(f))
+        try:
+            previous_sessions = int(f.get("previous_sessions") or 0)
+        except ValueError:
+            previous_sessions = 0
+        if previous_sessions > 0:
+            grant_entitlement(conn, pid, "LEGACY", previous_sessions, reason_code="ADMIN_DECISION",
+                               reason_text="حصص سابقة عند التسجيل", user_id=g.user["id"])
+        audit_log(conn, g.user["id"], "CREATE_PLAYER", "players", pid, after={k: v for k, v in f.items()})
         conn.commit()
         conn.close()
         flash("تم إنشاء اللاعب بنجاح")
@@ -198,4 +229,24 @@ def add_note(player_id):
     conn.commit()
     conn.close()
     flash("تم حفظ الملاحظة")
+    return redirect(f"/players/{player_id}")
+
+
+@bp.route("/players/<int:player_id>/photo", methods=["POST"])
+@permission_required("manage_players")
+def update_photo(player_id):
+    conn = get_conn()
+    player = q1(conn, "SELECT player_code FROM players WHERE id=?", (player_id,))
+    if not player:
+        conn.close()
+        abort(404)
+    photo_url = _save_player_photo(request.files.get("photo"), player["player_code"])
+    if photo_url:
+        ex(conn, "UPDATE players SET photo_url=? WHERE id=?", (photo_url, player_id))
+        audit_log(conn, g.user["id"], "UPDATE_PLAYER_PHOTO", "players", player_id, after={"photo_url": photo_url})
+        conn.commit()
+        flash("تم تحديث صورة اللاعب")
+    else:
+        flash("تعذّر رفع الصورة — تأكد من أنها صورة صالحة (jpg/png)")
+    conn.close()
     return redirect(f"/players/{player_id}")

@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, g, flash, abort
 from db import get_conn, q1
 from business.rbac import permission_required
-from business.points import award_points, coach_points_granted_today, PointsError
+from business.points import award_points, coach_points_granted_today, cancel_points_transaction, PointsError
 from business.settings_lib import get_setting
 from business import achievements as ach
 
@@ -44,3 +44,17 @@ def add_points(player_id):
         return redirect(f"/players/{player_id}")
     conn.close()
     return render_template("points_form.html", player=player, cap=cap, categories=CATEGORY_LABELS)
+
+
+@bp.route("/players/<int:player_id>/points/<int:txn_id>/cancel", methods=["POST"])
+@permission_required("grant_points")
+def cancel_points(player_id, txn_id):
+    conn = get_conn()
+    try:
+        cancel_points_transaction(conn, txn_id, g.user["id"])
+        conn.commit()
+        flash("تم إلغاء العملية وعكس الرصيد")
+    except PointsError as e:
+        flash(str(e))
+    conn.close()
+    return redirect(f"/players/{player_id}")

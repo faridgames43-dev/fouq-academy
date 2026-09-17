@@ -5,6 +5,8 @@ from business.rbac import login_required, permission_required, coach_group_ids, 
 from business import attendance as att
 from business import achievements as ach
 from business.audit import log as audit_log
+from business.points import get_balance as points_balance
+from business.levels import current_level
 
 bp = Blueprint("attendance_bp", __name__)
 
@@ -84,13 +86,29 @@ def scan(session_id):
         ach.check_after_attendance(conn, result["player"]["id"], g.user["id"])
         conn.commit()
         player = result["player"]
+        pts = points_balance(conn, player["id"])
+        level = current_level(conn, player["id"])
         conn.close()
         return jsonify({"ok": True, "already": result["already"], "message": result["message"],
                          "player_name": f"{player['first_name']} {player['last_name']}",
+                         "player_code": player["player_code"], "photo_url": player.get("photo_url"),
+                         "points": pts, "level_name": level["name"] if level else "الانطلاقة",
                          "remaining_total": result["remaining_total"], "player_id": player["id"]})
     except att.AttendanceError as e:
         conn.rollback(); conn.close()
         return jsonify({"ok": False, "message": str(e)}), 400
+
+
+@bp.route("/attendance/session/<int:session_id>/tv")
+@permission_required("take_attendance")
+def tv_screen(session_id):
+    conn = get_conn()
+    ts = q1(conn, "SELECT ts.*, g.name as group_name FROM training_sessions ts JOIN groups_ g ON g.id=ts.group_id WHERE ts.id=?",
+            (session_id,))
+    conn.close()
+    if not ts:
+        abort(404)
+    return render_template("attendance_tv.html", ts=ts)
 
 
 @bp.route("/attendance/session/<int:session_id>/mark_all_present", methods=["POST"])

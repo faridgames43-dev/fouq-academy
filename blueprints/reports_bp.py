@@ -4,7 +4,7 @@ from db import get_conn, q, q1
 from business.rbac import permission_required, branch_scope
 from business import reports as rep
 from business.dashboard import kpis
-from business.pdf_export import render_url_to_pdf
+from business.pdf_export import build_generic_report_pdf, build_monthly_report_pdf, build_player_report_pdf
 
 bp = Blueprint("reports_bp", __name__)
 
@@ -61,7 +61,8 @@ def view(report_type):
         return Response(csv_data, mimetype="text/csv",
                          headers={"Content-Disposition": f"attachment; filename={report_type}.csv"})
     if fmt == "pdf":
-        return _export_pdf(f"/reports/{report_type}/print", f"{report_type}.pdf")
+        buf = build_generic_report_pdf(title, rows)
+        return send_file(buf, as_attachment=False, download_name=f"{report_type}.pdf", mimetype="application/pdf")
     return render_template("report_generic.html", rows=rows, title=title, report_type=report_type)
 
 
@@ -92,7 +93,8 @@ def monthly(fmt=None):
     data = kpis(conn, branch_id)
     conn.close()
     if fmt == "pdf":
-        return _export_pdf("/reports/monthly/print", "monthly_report.pdf")
+        buf = build_monthly_report_pdf(data)
+        return send_file(buf, as_attachment=False, download_name="monthly_report.pdf", mimetype="application/pdf")
     return render_template("report_monthly.html", data=data, title="التقرير الشهري للإدارة")
 
 
@@ -109,7 +111,40 @@ def monthly_print():
 @bp.route("/reports/player/<int:player_id>/pdf")
 @permission_required("view_reports")
 def player_pdf(player_id):
-    return _export_pdf(f"/reports/player/{player_id}/print", f"player_{player_id}_report.pdf")
+    ctx = _player_report_context(player_id)
+    if ctx is None:
+        abort(404)
+    buf = build_player_report_pdf(ctx)
+    return send_file(buf, as_attachment=False, download_name=f"player_{player_id}_report.pdf", mimetype="application/pdf")
+
+
+def _player_report_context(player_id):
+    from business.entitlements import get_balances
+    from business.assessments import player_development_timeline, child_label
+    from business.levels import current_level
+    from business.points import get_balance
+    conn = get_conn()
+    player = q1(conn, """SELECT p.*, c.name as category_name, gr.name as group_name, co.name as coach_name,
+                         b.name as branch_name FROM players p LEFT JOIN categories c ON c.id=p.category_id
+                         LEFT JOIN groups_ gr ON gr.id=p.group_id LEFT JOIN coaches co ON co.id=p.coach_id
+                         LEFT JOIN branches b ON b.id=p.branch_id WHERE p.id=?""", (player_id,))
+    if not player:
+        conn.close()
+        return None
+    balances = get_balances(conn, player_id)
+    total_sessions = q1(conn, "SELECT COUNT(*) c FROM attendance WHERE player_id=?", (player_id,))["c"]
+    present = q1(conn, "SELECT COUNT(*) c FROM attendance WHERE player_id=? AND status IN ('PRESENT','LATE')", (player_id,))["c"]
+    absent = q1(conn, "SELECT COUNT(*) c FROM attendance WHERE player_id=? AND status='ABSENT'", (player_id,))["c"]
+    attendance_pct = round(present / total_sessions * 100, 1) if total_sessions else 0
+    dev = player_development_timeline(conn, player_id)
+    level = current_level(conn, player_id)
+    achievements = q(conn, """SELECT a.* FROM player_achievements pa JOIN achievements a ON a.id=pa.achievement_id
+                              WHERE pa.player_id=?""", (player_id,))
+    pts = get_balance(conn, player_id)
+    conn.close()
+    return {"player": player, "balances": balances, "attendance_pct": attendance_pct, "present": present,
+            "absent": absent, "total_sessions": total_sessions, "dev": dev, "level": level,
+            "achievements": achievements, "points": pts, "generated_at": date.today().isoformat()}
 
 
 @bp.route("/reports/player/<int:player_id>/print")
@@ -145,14 +180,3 @@ def player_print(player_id):
                             present=present, absent=absent, total_sessions=total_sessions, dev=dev, level=level,
                             achievements=achievements, first_overall=first, last_overall=last, points=pts,
                             child_label=child_label, generated_at=date.today().isoformat())
-
-
-def _export_pdf(print_path, filename):
-    base_url = request.url_root.rstrip("/")
-    url = base_url + print_path
-    session_cookie = request.cookies.get("session")
-    try:
-        out_path = render_url_to_pdf(url, filename, session_cookie)
-    except Exception as e:
-        return Response(f"تعذّر إنشاء ملف PDF: {e}", status=500)
-    return send_file(out_path, as_attachment=False, download_name=filename, mimetype="application/pdf")

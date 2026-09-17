@@ -1,10 +1,35 @@
+import os
+import uuid
 from flask import Blueprint, render_template, request, redirect, g, flash, abort
 from db import get_conn, q, q1
 from business.rbac import permission_required, login_required
-from business.rewards import list_rewards, request_redemption, update_redemption_status, RewardError
+from business.rewards import (
+    list_rewards, get_reward, create_reward, update_reward,
+    request_redemption, update_redemption_status, RewardError,
+)
 from business.points import get_balance
 
 bp = Blueprint("rewards_bp", __name__)
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "rewards")
+
+
+def _save_reward_photo(file_storage):
+    if not file_storage or not file_storage.filename:
+        return None
+    try:
+        from PIL import Image
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        fname = f"reward-{uuid.uuid4().hex[:10]}.jpg"
+        out_path = os.path.join(UPLOAD_DIR, fname)
+        img = Image.open(file_storage.stream)
+        img = img.convert("RGB")
+        img.thumbnail((600, 600))
+        img.save(out_path, "JPEG", quality=85)
+        return f"/static/uploads/rewards/{fname}"
+    except Exception:
+        return None
 
 
 @bp.route("/rewards")
@@ -17,6 +42,55 @@ def admin_index():
                              JOIN players p ON p.id=rr.player_id ORDER BY rr.id DESC""")
     conn.close()
     return render_template("rewards_admin.html", rewards=rewards, redemptions=redemptions)
+
+
+@bp.route("/rewards/new", methods=["GET", "POST"])
+@permission_required("manage_rewards")
+def new_reward():
+    if request.method == "POST":
+        f = request.form
+        photo_url = _save_reward_photo(request.files.get("photo"))
+        try:
+            cost = int(f.get("cost", 0))
+            stock = int(f.get("stock", 0))
+        except ValueError:
+            flash("التكلفة والمخزون يجب أن تكون أرقامًا")
+            return redirect("/rewards/new")
+        conn = get_conn()
+        create_reward(conn, f.get("name"), f.get("description"), cost, stock, photo_url, g.user["id"])
+        conn.commit()
+        conn.close()
+        flash("تم إضافة المنتج بنجاح")
+        return redirect("/rewards")
+    return render_template("reward_form.html", reward=None)
+
+
+@bp.route("/rewards/<int:reward_id>/edit", methods=["GET", "POST"])
+@permission_required("manage_rewards")
+def edit_reward(reward_id):
+    conn = get_conn()
+    reward = get_reward(conn, reward_id)
+    if not reward:
+        conn.close()
+        abort(404)
+    if request.method == "POST":
+        f = request.form
+        photo_url = _save_reward_photo(request.files.get("photo"))
+        try:
+            cost = int(f.get("cost", 0))
+            stock = int(f.get("stock", 0))
+        except ValueError:
+            conn.close()
+            flash("التكلفة والمخزون يجب أن تكون أرقامًا")
+            return redirect(f"/rewards/{reward_id}/edit")
+        active = 1 if f.get("active") == "on" else 0
+        update_reward(conn, reward_id, f.get("name"), f.get("description"), cost, stock, active, photo_url, g.user["id"])
+        conn.commit()
+        conn.close()
+        flash("تم تحديث المنتج بنجاح")
+        return redirect("/rewards")
+    conn.close()
+    return render_template("reward_form.html", reward=reward)
 
 
 @bp.route("/rewards/redemptions/<int:redemption_id>/<status>", methods=["POST"])
