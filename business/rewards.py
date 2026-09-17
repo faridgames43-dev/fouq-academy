@@ -17,6 +17,33 @@ def list_rewards(conn, active_only=True):
     return q(conn, sql)
 
 
+def get_reward(conn, reward_id):
+    return q1(conn, "SELECT * FROM rewards WHERE id=?", (reward_id,))
+
+
+def create_reward(conn, name, description, cost, stock, photo_url, user_id):
+    reward_id = ex(conn, """INSERT INTO rewards(name, description, photo_url, cost, stock, active)
+                            VALUES (?,?,?,?,?,1)""", (name, description, photo_url, cost, stock))
+    audit_log(conn, user_id, "CREATE_REWARD", "rewards", reward_id,
+              after={"name": name, "cost": cost, "stock": stock})
+    return reward_id
+
+
+def update_reward(conn, reward_id, name, description, cost, stock, active, photo_url, user_id):
+    before = q1(conn, "SELECT * FROM rewards WHERE id=?", (reward_id,))
+    if not before:
+        raise RewardError("المنتج غير موجود")
+    if photo_url:
+        ex(conn, """UPDATE rewards SET name=?, description=?, cost=?, stock=?, active=?, photo_url=? WHERE id=?""",
+           (name, description, cost, stock, active, photo_url, reward_id))
+    else:
+        ex(conn, """UPDATE rewards SET name=?, description=?, cost=?, stock=?, active=? WHERE id=?""",
+           (name, description, cost, stock, active, reward_id))
+    audit_log(conn, user_id, "UPDATE_REWARD", "rewards", reward_id,
+              before={"name": before["name"], "cost": before["cost"]},
+              after={"name": name, "cost": cost, "stock": stock})
+
+
 def request_redemption(conn, player_id, reward_id, user_id):
     reward = q1(conn, "SELECT * FROM rewards WHERE id=?", (reward_id,))
     if not reward or not reward["active"]:

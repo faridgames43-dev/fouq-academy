@@ -1,4 +1,4 @@
-رصيدفوقلايمكنأنيصبحالرصيدسالبًاالعمليةغيرموجودةلايمكنإلغاءعمليةإلغاءتمإلغاءهذهالعمليةمسبقًاإلغاءعملية"""رصيد فوق! (FOUQ Points) wallet & ledger. Balance is always a derived
+"""رصيد فوق! (FOUQ Points) wallet & ledger. Balance is always a derived
 sum of transactions - never edited directly - and never goes negative."""
 from db import q, q1, ex
 from business.audit import log as audit_log
@@ -53,3 +53,21 @@ def coach_points_granted_today(conn, coach_user_id, player_id, cap_default=20):
 def get_history(conn, player_id, limit=100):
     return q(conn, "SELECT * FROM points_transactions WHERE player_id=? ORDER BY id DESC LIMIT ?",
               (player_id, limit))
+
+
+def cancel_points_transaction(conn, txn_id, user_id):
+    """Reverse a points transaction by posting the exact opposite amount as a
+    new REVERSAL entry. The original row is never edited/deleted — the ledger
+    stays a complete, honest history — and award_points() already guarantees
+    the balance can never go negative."""
+    txn = q1(conn, "SELECT * FROM points_transactions WHERE id=?", (txn_id,))
+    if not txn:
+        raise PointsError("العملية غير موجودة")
+    if txn["category"] == "REVERSAL":
+        raise PointsError("لا يمكن إلغاء عملية إلغاء")
+    already = q1(conn, "SELECT id FROM points_transactions WHERE category='REVERSAL' AND reason LIKE ?",
+                 (f"%#{txn_id}%",))
+    if already:
+        raise PointsError("تم إلغاء هذه العملية مسبقًا")
+    return award_points(conn, txn["player_id"], -txn["amount"], f"إلغاء عملية #{txn_id}: {txn['reason']}",
+                         "REVERSAL", user_id)
