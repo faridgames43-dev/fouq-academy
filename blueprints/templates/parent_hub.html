@@ -22,6 +22,17 @@
     <div class="points-chip">⭐ {{ points }} رصيد فوق</div>
   </div>
 
+  <div class="section">
+    <div class="points-banner">
+      <div class="points-banner-icon">⭐</div>
+      <div class="points-banner-info">
+        <div class="points-banner-label">رصيد {{ selected.first_name }} من نقاط فوق القابلة للاستبدال بمكافآت</div>
+        <div class="points-banner-value">{{ points }} <small>نقطة</small></div>
+      </div>
+      <a class="btn btn-primary" style="background:#241a02;color:#fff;" href="/rewards/store?player_id={{ selected.id }}">🎁 استبدل الآن في متجر فوق</a>
+    </div>
+  </div>
+
   <div class="grid grid-4 section">
     <div class="card"><div class="card-title">هل يحضر؟</div><div class="kpi-value">{{ attendance_pct }}٪</div></div>
     <div class="card"><div class="card-title">الحصص المتبقية</div><div class="kpi-value">{{ balances.TOTAL }}</div>
