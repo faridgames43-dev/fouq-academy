@@ -261,6 +261,11 @@ def build_generic_report_pdf(title, rows):
         columns = list(rows[0].keys())
         max_cols = 6
         columns = columns[:max_cols]
+        # Column order is authored left-to-right in natural reading order
+        # (first column = first thing to read). reportlab always draws
+        # column 0 on the left, so reverse it for Arabic: the first column
+        # then lands on the right, where an Arabic reader looks first.
+        columns = columns[::-1]
         header = [ar(COLUMN_LABELS.get(col, col)) for col in columns]
         table_data = [header]
         for r in rows[:60]:
