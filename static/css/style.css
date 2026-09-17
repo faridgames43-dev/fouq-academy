@@ -217,6 +217,36 @@ tbody tr:hover { background: #fafbfe; }
 .hub-hero h1 { font-size: 22px; margin-bottom: 2px; }
 .points-chip { background: rgba(255,255,255,.12); border-radius: 14px; padding: 10px 16px; font-weight: 800; color: var(--gold-light); }
 
+/* ---------------- Redeemable points banner (very prominent, all accounts) ---------------- */
+.points-banner {
+  background: linear-gradient(120deg, var(--gold) 0%, var(--gold-light) 55%, #ffd97a 100%);
+  border-radius: 20px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  box-shadow: 0 10px 26px rgba(207,147,30,.35);
+  position: relative;
+  overflow: hidden;
+}
+.points-banner::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(circle at 85% 20%, rgba(255,255,255,.55), transparent 55%);
+  pointer-events: none;
+}
+.points-banner-icon {
+  font-size: 40px; line-height: 1; flex-shrink: 0;
+  background: rgba(255,255,255,.35); border-radius: 50%;
+  width: 68px; height: 68px; display: flex; align-items: center; justify-content: center;
+  animation: floaty 2.4s ease-in-out infinite;
+}
+.points-banner-info { flex: 1; min-width: 180px; }
+.points-banner-label { font-size: 13px; font-weight: 800; color: #4a3105; opacity: .85; }
+.points-banner-value { font-size: 34px; font-weight: 900; color: #241a02; margin-top: 2px; }
+.points-banner-value small { font-size: 15px; font-weight: 700; opacity: .75; margin-right: 4px; }
+.points-banner .btn { position: relative; z-index: 1; white-space: nowrap; }
+
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-x:auto; }
 .tabs a { padding: 10px 14px; font-size: 13.5px; font-weight: 700; color: var(--text-dim); border-bottom: 3px solid transparent; white-space:nowrap; }
 .tabs a.active { color: var(--navy-800); border-color: var(--gold); }
