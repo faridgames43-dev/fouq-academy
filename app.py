@@ -1,12 +1,14 @@
 import os
 from flask import Flask, session, redirect, url_for, g, request, render_template
 from db import get_conn, q1, init_db
+from jinja2 import ChoiceLoader, FileSystemLoader
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def create_app():
     app = Flask(__name__, static_folder="static", template_folder="templates")
+    app.jinja_loader = ChoiceLoader([app.jinja_loader, FileSystemLoader(os.path.join(BASE_DIR, "blueprints", "templates"))])
     app.secret_key = os.environ.get("FOUQ_SECRET_KEY", "fouq-academy-dev-secret-change-in-production-2026")
     app.config["JSON_AS_ASCII"] = False
 
