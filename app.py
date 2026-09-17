@@ -13,7 +13,7 @@ def create_app():
     app.config["JSON_AS_ASCII"] = False
 
     if not os.path.exists(os.path.join(BASE_DIR, "data", "academy.db")):
-        init_db()
+                from seed import main as seed_main; seed_main()
 
     @app.before_request
     def load_user():
