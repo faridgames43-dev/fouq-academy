@@ -1,4 +1,4 @@
-"""رصيد فوق! (FOUQ Points) wallet & ledger. Balance is always a derived
+رصيدفوقلايمكنأنيصبحالرصيدسالبًاالعمليةغيرموجودةلايمكنإلغاءعمليةإلغاءتمإلغاءهذهالعمليةمسبقًاإلغاءعملية"""رصيد فوق! (FOUQ Points) wallet & ledger. Balance is always a derived
 sum of transactions - never edited directly - and never goes negative."""
 from db import q, q1, ex
 from business.audit import log as audit_log
