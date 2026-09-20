@@ -86,14 +86,22 @@ def kpis(conn, branch_id=None):
 
 
 def needs_attention_today(conn, branch_id=None):
+    """Ordered by priority, exactly per spec: blocking/urgent items first,
+    then اشتراكات قريبة الانتهاء → لاعبون يحتاجون تقييم → طلبات الجوائز →
+    غياب متكرر."""
     bc = _branch_clause(branch_id)
     items = []
 
-    expiring_7 = q1(conn, f"""SELECT COUNT(*) c FROM subscriptions s JOIN players p ON p.id=s.player_id
-                              WHERE s.status='EXPIRING_SOON'{bc}
-                              AND s.id=(SELECT MAX(id) FROM subscriptions s2 WHERE s2.player_id=s.player_id)""")["c"]
-    if expiring_7:
-        items.append({"icon": "⏳", "text": f"{expiring_7} اشتراك سينتهي خلال 7 أيام", "href": "/renewals"})
+    unfinished_sessions = q1(conn, f"""SELECT COUNT(*) c FROM training_sessions ts WHERE ts.session_date <= date('now')
+        AND ts.status IN ('SCHEDULED','STARTED'){_branch_clause(branch_id,'ts')}""")["c"]
+    if unfinished_sessions:
+        items.append({"icon": "⏱️", "text": f"{unfinished_sessions} حصة لم تُغلق من المدرب", "href": "/attendance"})
+
+    no_sessions = q1(conn, f"""SELECT COUNT(DISTINCT p.id) c FROM players p
+        WHERE p.status='ACTIVE'{bc} AND NOT EXISTS (
+            SELECT 1 FROM session_entitlements se WHERE se.player_id=p.id AND se.status='ACTIVE' AND se.quantity_remaining>0)""")["c"]
+    if no_sessions:
+        items.append({"icon": "🛑", "text": f"{no_sessions} لاعب نفدت جميع حصصه", "href": "/renewals"})
 
     expired_with_comp = q1(conn, f"""SELECT COUNT(DISTINCT p.id) c FROM players p
         JOIN subscriptions s ON s.player_id=p.id AND s.id=(SELECT MAX(id) FROM subscriptions s2 WHERE s2.player_id=p.id)
@@ -102,21 +110,16 @@ def needs_attention_today(conn, branch_id=None):
     if expired_with_comp:
         items.append({"icon": "🎯", "text": f"{expired_with_comp} لاعب انتهى اشتراكه ولديه حصص مستحقة", "href": "/renewals"})
 
-    no_sessions = q1(conn, f"""SELECT COUNT(DISTINCT p.id) c FROM players p
-        WHERE p.status='ACTIVE'{bc} AND NOT EXISTS (
-            SELECT 1 FROM session_entitlements se WHERE se.player_id=p.id AND se.status='ACTIVE' AND se.quantity_remaining>0)""")["c"]
-    if no_sessions:
-        items.append({"icon": "🛑", "text": f"{no_sessions} لاعب نفدت جميع حصصه", "href": "/renewals"})
+    expiring_7 = q1(conn, f"""SELECT COUNT(*) c FROM subscriptions s JOIN players p ON p.id=s.player_id
+                              WHERE s.status='EXPIRING_SOON'{bc}
+                              AND s.id=(SELECT MAX(id) FROM subscriptions s2 WHERE s2.player_id=s.player_id)""")["c"]
+    if expiring_7:
+        items.append({"icon": "⏳", "text": f"{expiring_7} اشتراك سينتهي خلال 7 أيام", "href": "/renewals"})
 
     missing_assessment = q1(conn, f"""SELECT COUNT(*) c FROM players p WHERE p.status='ACTIVE'{bc}
         AND NOT EXISTS (SELECT 1 FROM assessments a WHERE a.player_id=p.id AND a.assessment_date >= date('now','-60 day'))""")["c"]
     if missing_assessment:
         items.append({"icon": "📝", "text": f"{missing_assessment} لاعبين يحتاجون تقييمًا", "href": "/players"})
-
-    unfinished_sessions = q1(conn, f"""SELECT COUNT(*) c FROM training_sessions ts WHERE ts.session_date <= date('now')
-        AND ts.status IN ('SCHEDULED','STARTED'){_branch_clause(branch_id,'ts')}""")["c"]
-    if unfinished_sessions:
-        items.append({"icon": "⏱️", "text": f"{unfinished_sessions} حصة لم تُغلق من المدرب", "href": "/attendance"})
 
     pending_redemptions = q1(conn, "SELECT COUNT(*) c FROM reward_redemptions WHERE status='PENDING'")["c"]
     if pending_redemptions:

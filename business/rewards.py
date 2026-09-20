@@ -85,6 +85,13 @@ def update_redemption_status(conn, redemption_id, new_status, user_id):
               before={"status": red["status"]}, after={"status": new_status})
 
 
+def nearest_reward(conn, balance):
+    """The cheapest reward the player can't yet afford — used to show
+    'X points to go' on the player/parent home screens."""
+    return q1(conn, "SELECT * FROM rewards WHERE active=1 AND stock>0 AND cost>? ORDER BY cost ASC LIMIT 1",
+              (balance,))
+
+
 def player_redemptions(conn, player_id):
     return q(
         conn,

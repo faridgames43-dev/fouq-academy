@@ -59,3 +59,14 @@ def render_code39(code: str, width=420, height=110) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def render_qr(code: str) -> bytes:
+    """QR code encoding the player's FOUQ code — a second, faster-to-scan
+    option alongside the Code39 barcode above (most phone cameras and
+    modern scanners read QR natively)."""
+    import qrcode
+    img = qrcode.make(code, border=2, box_size=8)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()

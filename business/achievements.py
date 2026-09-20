@@ -45,6 +45,8 @@ def check_after_attendance(conn, player_id, user_id=None):
     if len(last5) == 5 and all(r["status"] in ("PRESENT", "LATE") for r in last5):
         if _award_if_new(conn, player_id, "STREAK_5", user_id):
             newly.append("STREAK_5")
+    newly += check_perfect_attendance(conn, player_id, user_id)
+    newly += check_tenure(conn, player_id, user_id)
     return newly
 
 
@@ -86,3 +88,66 @@ def check_development_leap(conn, player_id, prev_overall, new_overall, user_id=N
 
 def award_manual(conn, player_id, code, user_id):
     return _award_if_new(conn, player_id, code, user_id)
+
+
+def check_perfect_attendance(conn, player_id, user_id=None):
+    """حضور كامل: لا غياب واحد خلال الشهر الحالي (بحد أدنى 4 حصص مسجّلة)."""
+    from datetime import date
+    month_start = date.today().replace(day=1).isoformat()
+    rows = q(
+        conn,
+        """SELECT a.status FROM attendance a JOIN training_sessions ts ON ts.id=a.training_session_id
+           WHERE a.player_id=? AND ts.session_date >= ?""",
+        (player_id, month_start),
+    )
+    newly = []
+    if len(rows) >= 4 and all(r["status"] in ("PRESENT", "LATE") for r in rows):
+        if _award_if_new(conn, player_id, "PERFECT_ATTENDANCE", user_id):
+            newly.append("PERFECT_ATTENDANCE")
+    return newly
+
+
+def check_tenure(conn, player_id, user_id=None):
+    """30 يومًا مع فوق: مرور 30 يومًا على تاريخ الانضمام."""
+    from datetime import date
+    player = q1(conn, "SELECT join_date FROM players WHERE id=?", (player_id,))
+    newly = []
+    if player and player["join_date"]:
+        try:
+            joined = date.fromisoformat(player["join_date"])
+            if (date.today() - joined).days >= 30:
+                if _award_if_new(conn, player_id, "TENURE_30", user_id):
+                    newly.append("TENURE_30")
+        except Exception:
+            pass
+    return newly
+
+
+def check_skill_growth(conn, player_id, prev_skill_avg, new_skill_avg, user_id=None):
+    """تطور مهاري: تحسّن واضح في محور المهاري تحديدًا (لا التقييم العام)."""
+    newly = []
+    if prev_skill_avg is not None and new_skill_avg is not None and (new_skill_avg - prev_skill_avg) >= 10:
+        if _award_if_new(conn, player_id, "SKILL_GROWTH", user_id):
+            newly.append("SKILL_GROWTH")
+    return newly
+
+
+EXTRA_ACHIEVEMENTS = [
+    ("PERFECT_ATTENDANCE", "حضور كامل", "حضور 100% خلال الشهر الحالي بدون أي غياب", "🌟", 20),
+    ("TENURE_30", "30 يومًا مع فوق", "مرور 30 يومًا على الانضمام لأكاديمية فوق", "📅", 15),
+    ("SKILL_GROWTH", "تطور مهاري", "تحسّن ملحوظ في التقييم المهاري", "⚽", 20),
+    ("PLAYER_OF_SESSION", "لاعب الحصة", "تم اختياره لاعب الحصة", "🏅", 10),
+]
+
+
+def ensure_extra_achievements(conn):
+    """Idempotent: insert any achievement code that doesn't exist yet, and
+    align a couple of names with the exact wording the academy wants —
+    never touches an achievement a player has already earned differently."""
+    for code, name, desc, icon, pr in EXTRA_ACHIEVEMENTS:
+        existing = q1(conn, "SELECT id FROM achievements WHERE code=?", (code,))
+        if not existing:
+            ex(conn, "INSERT INTO achievements(code,name,description,icon,points_reward) VALUES (?,?,?,?,?)",
+               (code, name, desc, icon, pr))
+    # "روح الفريق" -> "روح رياضية" per spec wording (same code/history, just the label)
+    ex(conn, "UPDATE achievements SET name='روح رياضية', description='لحظة روح رياضية مميزة' WHERE code='TEAM_SPIRIT'")

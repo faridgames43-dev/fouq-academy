@@ -3,7 +3,7 @@ Email later (see NotificationChannel stub) but we never claim those work
 without a real API connection."""
 from datetime import date
 from db import q, q1, ex
-from business.entitlements import get_compensation_expiring_soon
+from business.entitlements import get_compensation_expiring_soon, get_balances
 from business.subscriptions import sync_subscription_statuses
 
 
@@ -61,6 +61,73 @@ def run_daily_checks(conn, admin_user_ids=None):
                              f"تنتهي في {c['expires_at']}", player_id=c["player_id"])
         created += 1
 
+    created += send_subscription_threshold_alerts(conn)
+    created += send_sessions_exhausted_alerts(conn)
+
+    return created
+
+
+def send_subscription_threshold_alerts(conn):
+    """Exact 7 / 3 / 1 day alerts before a subscription's end_date — each
+    threshold fires exactly once per subscription (tracked in
+    subscription_alerts_sent), unlike the generic ≤7-day EXPIRING_SOON
+    status bucket above."""
+    created = 0
+    today = date.today()
+    subs = q(
+        conn,
+        """SELECT s.*, p.first_name, p.last_name, p.id as pid FROM subscriptions s
+           JOIN players p ON p.id = s.player_id WHERE s.status NOT IN ('FROZEN','CANCELLED','EXPIRED')""",
+    )
+    for s in subs:
+        try:
+            end = date.fromisoformat(s["end_date"])
+        except Exception:
+            continue
+        days_left = (end - today).days
+        if days_left not in (7, 3, 1):
+            continue
+        threshold = str(days_left)
+        already = q1(
+            conn, "SELECT id FROM subscription_alerts_sent WHERE subscription_id=? AND threshold=?",
+            (s["id"], threshold),
+        )
+        if already:
+            continue
+        ex(conn, "INSERT INTO subscription_alerts_sent(subscription_id, threshold) VALUES (?,?)",
+           (s["id"], threshold))
+        create_notification(
+            conn, "SUBSCRIPTION_EXPIRING_SOON",
+            f"باقي {days_left} يوم على انتهاء اشتراك {s['first_name']} {s['last_name']}",
+            f"ينتهي الاشتراك في {s['end_date']} — يُنصح بالتجديد الآن", player_id=s["pid"], dedupe=False,
+        )
+        created += 1
+    return created
+
+
+def send_sessions_exhausted_alerts(conn):
+    """نفاد الحصص: subscription is still time-active but the player has
+    zero usable session entitlements left — distinct from a time-expired
+    subscription. Fires once per day while the condition holds."""
+    created = 0
+    active_players = q(
+        conn,
+        """SELECT DISTINCT p.id as pid, p.first_name, p.last_name FROM players p
+           JOIN subscriptions s ON s.player_id = p.id
+           WHERE s.status IN ('ACTIVE','EXPIRING_SOON')
+             AND s.id = (SELECT MAX(id) FROM subscriptions s2 WHERE s2.player_id = p.id)""",
+    )
+    for p in active_players:
+        balances = get_balances(conn, p["pid"])
+        if balances["TOTAL"] > 0:
+            continue
+        create_notification(
+            conn, "SESSIONS_EXHAUSTED",
+            f"نفدت حصص {p['first_name']} {p['last_name']}",
+            "الاشتراك ما زال ساري زمنيًا لكن لا توجد حصص متبقية للحضور — راجع الإدارة",
+            player_id=p["pid"],
+        )
+        created += 1
     return created
 
 

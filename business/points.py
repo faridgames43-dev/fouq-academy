@@ -8,6 +8,29 @@ class PointsError(Exception):
     pass
 
 
+# Preset quick-action reasons (رصيد فوق) — shown as one-tap buttons for
+# coaches/supervisors, exactly matching the academy's approved wording.
+ADD_REASONS = [
+    ("الحضور المبكر", "ATTENDANCE"),
+    ("الانضباط", "DISCIPLINE"),
+    ("الروح الرياضية", "BEHAVIOR"),
+    ("مساعدة زميل", "BEHAVIOR"),
+    ("الفوز بتحدٍ", "CHALLENGE"),
+    ("تطور ملحوظ", "DEVELOPMENT"),
+    ("لاعب الحصة", "ACHIEVEMENT"),
+    ("الالتزام باللباس", "DISCIPLINE"),
+]
+
+SUBTRACT_REASONS = [
+    ("التأخر", "DISCIPLINE"),
+    ("سوء السلوك", "BEHAVIOR"),
+    ("السب", "BEHAVIOR"),
+    ("عدم الالتزام", "DISCIPLINE"),
+    ("إفساد التدريب", "DISCIPLINE"),
+    ("مخالفة تعليمات المدرب", "DISCIPLINE"),
+]
+
+
 def get_balance(conn, player_id):
     row = q1(conn, "SELECT balance FROM points_wallets WHERE player_id=?", (player_id,))
     if not row:
@@ -16,7 +39,7 @@ def get_balance(conn, player_id):
     return row["balance"]
 
 
-def award_points(conn, player_id, amount, reason, category, user_id, training_session_id=None):
+def award_points(conn, player_id, amount, reason, category, user_id, training_session_id=None, note=None):
     if amount == 0:
         return
     before = get_balance(conn, player_id)
@@ -31,9 +54,9 @@ def award_points(conn, player_id, amount, reason, category, user_id, training_se
     ex(
         conn,
         """INSERT INTO points_transactions(player_id, amount, reason, category, user_id,
-              balance_before, balance_after, training_session_id)
-           VALUES (?,?,?,?,?,?,?,?)""",
-        (player_id, amount, reason, category, user_id, before, after, training_session_id),
+              balance_before, balance_after, training_session_id, note)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (player_id, amount, reason, category, user_id, before, after, training_session_id, note),
     )
     audit_log(conn, user_id, "POINTS_TRANSACTION", "players", player_id,
               after={"amount": amount, "category": category, "balance_after": after}, reason=reason)
@@ -51,8 +74,13 @@ def coach_points_granted_today(conn, coach_user_id, player_id, cap_default=20):
 
 
 def get_history(conn, player_id, limit=100):
-    return q(conn, "SELECT * FROM points_transactions WHERE player_id=? ORDER BY id DESC LIMIT ?",
-              (player_id, limit))
+    return q(
+        conn,
+        """SELECT pt.*, u.name as coach_name FROM points_transactions pt
+           LEFT JOIN users u ON u.id = pt.user_id
+           WHERE pt.player_id=? ORDER BY pt.id DESC LIMIT ?""",
+        (player_id, limit),
+    )
 
 
 def cancel_points_transaction(conn, txn_id, user_id):
