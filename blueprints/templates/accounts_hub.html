@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}الحسابات{% endblock %}
+{% block page_title %}الحسابات 👤{% endblock %}
+{% block content %}
+
+<div class="section">
+  <p class="muted">من هنا تنشئ حساب دخول لأي نوع — لاعب، مدرب، ولي أمر، أو حساب إداري. كل حساب جديد يحصل على بيانات دخول تظهر لك مرة واحدة فقط بعد الإنشاء، لترسلها لصاحب الحساب.</p>
+</div>
+
+<div class="grid grid-2 section">
+  <div class="card">
+    <div class="card-title">🧒 حساب لاعب جديد</div>
+    <p class="muted" style="font-size:12.5px;">ينشئ ملف اللاعب + حساب دخول له تلقائيًا (وحساب ولي أمر أيضًا إن لم يكن موجودًا).</p>
+    <a class="btn btn-gold btn-block" href="/players/new">+ إنشاء حساب لاعب</a>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧑‍🏫 حساب مدرب جديد</div>
+    <form method="post" action="/settings/coaches/new">
+      <div class="field"><label>الاسم</label><input name="name" required></div>
+      <div class="field"><label>الجوال</label><input name="phone" required></div>
+      <div class="field"><label>الفرع</label>
+        <select name="branch_id">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+      </div>
+      <button class="btn btn-gold btn-block" type="submit">+ إنشاء حساب مدرب</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">👨‍👦 حساب ولي أمر جديد</div>
+    <p class="muted" style="font-size:12.5px;">لإنشاء حساب ولي أمر بشكل مستقل (بدون ربطه بلاعب فورًا) — يمكن ربط الأبناء به لاحقًا عند إضافتهم.</p>
+    <form method="post" action="/accounts/parents/new">
+      <div class="field"><label>الاسم</label><input name="name" required></div>
+      <div class="field"><label>الجوال</label><input name="phone" required></div>
+      <button class="btn btn-gold btn-block" type="submit">+ إنشاء حساب ولي أمر</button>
+    </form>
+    {% if parents %}
+    <details style="margin-top:10px;"><summary class="muted" style="cursor:pointer;font-size:12.5px;">عرض أولياء الأمور الحاليين ({{ parents|length }})</summary>
+      <ul style="font-size:12.5px;">{% for p in parents %}<li>{{ p.name }} — {{ p.phone or '-' }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </div>
+
+  {% if can_manage_users %}
+  <div class="card">
+    <div class="card-title">🛡️ حساب إداري جديد</div>
+    <p class="muted" style="font-size:12.5px;">للإدارة العليا، مدير المشروع، مدير الفرع، أو المشرف التشغيلي.</p>
+    <form method="post" action="/accounts/staff/new">
+      <div class="field"><label>الاسم</label><input name="name" required></div>
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" name="email"></div>
+      <div class="field"><label>الجوال</label><input name="phone"></div>
+      <div class="field"><label>الدور</label>
+        <select name="role" required>
+          <option value="SUPER_ADMIN">إدارة عليا</option>
+          <option value="PROJECT_MANAGER">مدير مشروع</option>
+          <option value="BRANCH_MANAGER">مدير فرع</option>
+          <option value="SUPERVISOR">مشرف تشغيلي</option>
+        </select>
+      </div>
+      <div class="field"><label>الفرع (لمدير الفرع/المشرف)</label>
+        <select name="branch_id"><option value="">-</option>{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+      </div>
+      <button class="btn btn-gold btn-block" type="submit">+ إنشاء حساب إداري</button>
+    </form>
+    {% if staff %}
+    <details style="margin-top:10px;"><summary class="muted" style="cursor:pointer;font-size:12.5px;">عرض الحسابات الإدارية الحالية ({{ staff|length }})</summary>
+      <ul style="font-size:12.5px;">{% for s in staff %}<li>{{ s.name }} — {{ staff_role_labels[s.role] }} — {{ s.email or s.phone or '-' }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if current_user.role == 'SUPER_ADMIN' %}
+<div class="section">
+  <div class="card" style="border:1px solid #fdeceb;">
+    <div class="card-title" style="color:var(--red);">⚠️ بدء من جديد — حذف بيانات اللاعبين والمدربين وأولياء الأمور الحالية</div>
+    <p class="muted" style="font-size:12.5px;">يحذف كل اللاعبين والمدربين وأولياء الأمور الحاليين (بيانات تجريبية) نهائيًا حتى تضيف الحسابات الحقيقية بنفسك. لا يؤثر على الفروع، المجموعات، الباقات، أو حسابات الإدارة.</p>
+    <a class="btn btn-danger" href="/accounts/reset-data">بدء من جديد →</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

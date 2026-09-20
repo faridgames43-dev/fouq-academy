@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}بدء من جديد{% endblock %}
+{% block page_title %}⚠️ بدء من جديد{% endblock %}
+{% block content %}
+
+<div class="section">
+  <div class="card" style="border:2px solid var(--red);">
+    <div class="card-title" style="color:var(--red);">هذا الإجراء نهائي ولا يمكن التراجع عنه</div>
+    <p>سيتم حذف كل ما يلي نهائيًا من قاعدة البيانات المباشرة:</p>
+    <ul>
+      <li><b>{{ counts.players }}</b> لاعب — مع كل تاريخهم (حضور، نقاط، إنجازات، اشتراكات، تسليم مهام...)</li>
+      <li><b>{{ counts.coaches }}</b> مدرب — وحسابات دخولهم</li>
+      <li><b>{{ counts.parents }}</b> ولي أمر — وحسابات دخولهم</li>
+      <li><b>{{ counts.training_sessions }}</b> حصة تدريبية مجدولة سابقًا</li>
+    </ul>
+    <p class="muted" style="font-size:12.5px;">لن يتأثر: الفروع، المجموعات، الفئات، الباقات، المستويات، الإنجازات، المكافآت، المهام (تعريفاتها)، العملاء المحتملون، وحسابات الإدارة (بما فيها حسابك الحالي).</p>
+
+    <a class="btn btn-outline btn-block" style="margin:12px 0;" href="/accounts/reset-data/backup.json">⬇️ تحميل نسخة احتياطية كاملة (JSON) قبل الحذف</a>
+
+    <form method="post" action="/accounts/reset-data" onsubmit="return confirm('تأكيد أخير: سيتم حذف كل بيانات اللاعبين والمدربين وأولياء الأمور نهائيًا. لا يمكن التراجع. متابعة؟');">
+      <div class="field">
+        <label>اكتب العبارة التالية بالضبط لتأكيد الحذف: <b>حذف نهائي</b></label>
+        <input type="text" name="confirm_text" placeholder="حذف نهائي" required>
+      </div>
+      <button class="btn btn-danger btn-block" type="submit">🗑️ تأكيد الحذف النهائي</button>
+    </form>
+    <a class="btn btn-outline btn-block" style="margin-top:8px;" href="/accounts">إلغاء والرجوع</a>
+  </div>
+</div>
+{% endblock %}

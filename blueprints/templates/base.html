@@ -28,6 +28,7 @@
 
       {% if role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
         {{ item('/dashboard', '🏠', 'الرئيسية') }}
+        {{ item('/accounts', '👤', 'الحسابات') }}
         {{ item('/players', '🧒', 'اللاعبون') }}
         {{ item('/attendance', '✅', 'التحضير') }}
         {{ item('/renewals', '🔁', 'التجديدات') }}
