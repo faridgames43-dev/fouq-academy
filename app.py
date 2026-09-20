@@ -11,6 +11,7 @@ def create_app():
     app.jinja_loader = ChoiceLoader([app.jinja_loader, FileSystemLoader(os.path.join(BASE_DIR, "blueprints", "templates"))])
     app.secret_key = os.environ.get("FOUQ_SECRET_KEY", "fouq-academy-dev-secret-change-in-production-2026")
     app.config["JSON_AS_ASCII"] = False
+    app.config["MAX_CONTENT_LENGTH"] = 30 * 1024 * 1024  # 30MB safety cap (assignment video uploads, etc.)
 
     if not os.path.exists(os.path.join(BASE_DIR, "data", "academy.db")):
                 from seed import main as seed_main; seed_main()
@@ -55,10 +56,11 @@ def create_app():
     from blueprints.parent_bp import bp as parent_bp
     from blueprints.player_bp import bp as player_bp
     from blueprints.notifications_bp import bp as notifications_bp
+    from blueprints.assignments_bp import bp as assignments_bp
 
     for bp in [auth_bp, dashboard_bp, players_bp, subscriptions_bp, attendance_bp, renewals_bp,
                assessments_bp, levels_bp, points_bp, rewards_bp, reports_bp, settings_bp, crm_bp,
-               retention_bp, audit_bp, search_bp, parent_bp, player_bp, notifications_bp]:
+               retention_bp, audit_bp, search_bp, parent_bp, player_bp, notifications_bp, assignments_bp]:
         app.register_blueprint(bp)
 
     @app.errorhandler(403)

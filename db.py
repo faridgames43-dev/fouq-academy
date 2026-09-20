@@ -87,6 +87,30 @@ def migrate_db():
         sent_at TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(subscription_id, threshold)
     )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL REFERENCES groups_(id),
+        title TEXT NOT NULL,
+        description TEXT,
+        due_date TEXT,
+        points_reward INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER REFERENCES users(id),
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS assignment_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        assignment_id INTEGER NOT NULL REFERENCES assignments(id),
+        player_id INTEGER NOT NULL REFERENCES players(id),
+        file_url TEXT NOT NULL,
+        file_type TEXT,
+        submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')),
+        reviewed_by INTEGER REFERENCES users(id),
+        reviewed_at TEXT,
+        feedback_note TEXT,
+        UNIQUE(assignment_id, player_id)
+    )""")
     # --- new columns on existing tables ---
     add_column("training_sessions", "player_of_session_id INTEGER REFERENCES players(id)")
     add_column("training_sessions", "session_note TEXT")
