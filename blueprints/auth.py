@@ -9,29 +9,8 @@ ROLE_HOME = {
     "SUPERVISOR": "/dashboard", "COACH": "/coach", "PARENT": "/parent", "PLAYER": "/me",
 }
 
-DEMO_ACCOUNTS = [
-    ("مدير المشروع (يرى كل شيء عمليًا)", "pm@fouq.sa", "PROJECT_MANAGER"),
-    ("الإدارة العليا", "superadmin@fouq.sa", "SUPER_ADMIN"),
-    ("مدير الفرع", "branchmgr@fouq.sa", "BRANCH_MANAGER"),
-    ("المشرف التشغيلي", "supervisor@fouq.sa", "SUPERVISOR"),
-    ("مدرب - الكابتن سعد", "coach1@fouq.sa", "COACH"),
-    ("مدرب - الكابتن فهد", "coach2@fouq.sa", "COACH"),
-]
-
-
-def _sample_contacts():
-    conn = get_conn()
-    parent_user = q1(conn, """SELECT u.name, u.phone FROM users u JOIN parents p ON p.user_id=u.id
-                              WHERE p.name='محمد الأحمدي'""")
-    player_user = q1(conn, """SELECT u.name, u.phone FROM users u JOIN players p ON p.user_id=u.id
-                              WHERE p.player_code='FOUQ-0001'""")
-    conn.close()
-    return parent_user, player_user
-
-
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    parent_user, player_user = _sample_contacts()
     if request.method == "POST":
         identifier = request.form.get("identifier", "").strip()
         password = request.form.get("password", "")
@@ -49,9 +28,8 @@ def login():
             session["role"] = user["role"]
             return redirect(ROLE_HOME.get(user["role"], "/dashboard"))
         flash_error = "بيانات الدخول غير صحيحة"
-        return render_template("login.html", error=flash_error, demo_accounts=DEMO_ACCOUNTS,
-                                parent_user=parent_user, player_user=player_user)
-    return render_template("login.html", demo_accounts=DEMO_ACCOUNTS, parent_user=parent_user, player_user=player_user)
+        return render_template("login.html", error=flash_error)
+    return render_template("login.html")
 
 
 @bp.route("/logout")
