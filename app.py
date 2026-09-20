@@ -57,10 +57,12 @@ def create_app():
     from blueprints.player_bp import bp as player_bp
     from blueprints.notifications_bp import bp as notifications_bp
     from blueprints.assignments_bp import bp as assignments_bp
+    from blueprints.accounts_bp import bp as accounts_bp
 
     for bp in [auth_bp, dashboard_bp, players_bp, subscriptions_bp, attendance_bp, renewals_bp,
                assessments_bp, levels_bp, points_bp, rewards_bp, reports_bp, settings_bp, crm_bp,
-               retention_bp, audit_bp, search_bp, parent_bp, player_bp, notifications_bp, assignments_bp]:
+               retention_bp, audit_bp, search_bp, parent_bp, player_bp, notifications_bp, assignments_bp,
+               accounts_bp]:
         app.register_blueprint(bp)
 
     @app.errorhandler(403)
