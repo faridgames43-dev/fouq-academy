@@ -136,6 +136,8 @@ def cancel(attendance_id):
     row = q1(conn, "SELECT * FROM attendance WHERE id=?", (attendance_id,))
     try:
         att.cancel_attendance(conn, attendance_id, g.user["id"], request.form.get("reason", "إلغاء تحضير"))
+        if row:
+            ach.recheck_after_attendance_cancel(conn, row["player_id"], g.user["id"])
         conn.commit()
         flash("تم إلغاء التحضير وعكس أي خصم مرتبط به")
     except att.AttendanceError as e:
@@ -143,6 +145,60 @@ def cancel(attendance_id):
     session_id = row["training_session_id"] if row else None
     conn.close()
     return redirect(f"/attendance/session/{session_id}" if session_id else "/attendance")
+
+
+@bp.route("/attendance/session/<int:session_id>/bulk_mark", methods=["POST"])
+@permission_required("take_attendance")
+def bulk_mark(session_id):
+    """🟨 تعديل التحضير دفعة واحدة: تحديد فردي/جماعي وتغيير الحالة لكل
+    المحددين بضغطة واحدة — يعيد استخدام نفس دالة mark_attendance المُختبرة
+    لكل لاعب، فتبقى كل قواعد الحصص/الاستحقاق سارية تمامًا كما في التحضير الفردي."""
+    conn = get_conn()
+    data = request.get_json(force=True)
+    player_ids = data.get("player_ids", [])
+    status = data.get("status")
+    if status not in ("PRESENT", "LATE", "ABSENT", "EXCUSED"):
+        conn.close()
+        return jsonify({"ok": False, "message": "حالة غير صالحة"}), 400
+    results = []
+    for pid in player_ids:
+        try:
+            r = att.mark_attendance(conn, session_id, int(pid), status, g.user["id"])
+            ach.check_after_attendance(conn, int(pid), g.user["id"])
+            chal.check_and_complete(conn, int(pid), g.user["id"])
+            results.append({"player_id": int(pid), "ok": True, **r})
+        except att.AttendanceError as e:
+            results.append({"player_id": int(pid), "ok": False, "message": str(e)})
+    conn.commit()
+    conn.close()
+    ok_count = sum(1 for r in results if r["ok"])
+    return jsonify({"ok": True, "updated": ok_count, "total": len(player_ids), "status": status, "results": results})
+
+
+@bp.route("/attendance/session/<int:session_id>/bulk_cancel", methods=["POST"])
+@permission_required("cancel_attendance")
+def bulk_cancel(session_id):
+    """🟥 إلغاء تحضير محددين / إلغاء الجميع — يعكس تلقائيًا أي خصم حصة
+    مرتبط بكل سجل (نفس منطق الإلغاء الفردي المُختبر)، ثم يراجع أهلية أي
+    إنجاز مرتبط بعدد الحضور (مثل أول حصة / 10 حصص) ويعكس نقاطه عبر سجل
+    عكسي دائمًا — لا يُحذف أي سجل نقاط نهائيًا."""
+    conn = get_conn()
+    data = request.get_json(force=True)
+    cancel_all = bool(data.get("all"))
+    player_ids = set(int(x) for x in data.get("player_ids", []) or [])
+    rows = q(conn, "SELECT * FROM attendance WHERE training_session_id=?", (session_id,))
+    targets = rows if cancel_all else [r for r in rows if r["player_id"] in player_ids]
+    cancelled = 0
+    for row in targets:
+        try:
+            att.cancel_attendance(conn, row["id"], g.user["id"], "إلغاء جماعي")
+            ach.recheck_after_attendance_cancel(conn, row["player_id"], g.user["id"])
+            cancelled += 1
+        except att.AttendanceError:
+            pass
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "cancelled": cancelled, "total": len(targets)})
 
 
 def _finalize_session(conn, session_id, force=False):
@@ -157,6 +213,27 @@ def _finalize_session(conn, session_id, force=False):
     ex(conn, "UPDATE training_sessions SET status='COMPLETED' WHERE id=?", (session_id,))
     audit_log(conn, g.user["id"], "COMPLETE_SESSION", "training_sessions", session_id)
     return True
+
+
+@bp.route("/attendance/session/<int:session_id>/reopen", methods=["POST"])
+@permission_required("take_attendance")
+def reopen_session(session_id):
+    """يحل مشكلة 'التحضير إذا وقف ما أقدر أخليه يبدأ من جديد': يعيد الحصة
+    المُغلقة (مكتملة) إلى حالة مجدولة بحيث تظهر مرة أخرى في شاشة التحضير
+    وفي 'يحتاج تدخل اليوم'، ويقدر المدرب يكمل/يصحح التحضير عليها من جديد.
+    لا يمسّ أي سجل تحضير أو نقاط موجود مسبقًا — تغيير حالة فقط."""
+    conn = get_conn()
+    ts = q1(conn, "SELECT * FROM training_sessions WHERE id=?", (session_id,))
+    if not ts:
+        conn.close()
+        abort(404)
+    ex(conn, "UPDATE training_sessions SET status='SCHEDULED' WHERE id=?", (session_id,))
+    audit_log(conn, g.user["id"], "REOPEN_SESSION", "training_sessions", session_id,
+              before={"status": ts["status"]}, after={"status": "SCHEDULED"})
+    conn.commit()
+    conn.close()
+    flash("تم إعادة فتح الحصة — يمكنك إكمال أو تعديل التحضير الآن ✅")
+    return redirect(f"/attendance/session/{session_id}")
 
 
 @bp.route("/attendance/session/<int:session_id>/complete", methods=["POST"])
