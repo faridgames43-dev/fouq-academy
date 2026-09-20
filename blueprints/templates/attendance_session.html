@@ -11,18 +11,52 @@
   <div id="scan-feedback" class="scan-feedback"></div>
 </div>
 
-<div class="section flex gap-8 flex-wrap">
+<div class="section flex gap-8 flex-wrap items-center">
+  <span class="badge {{ {'SCHEDULED':'badge-blue','STARTED':'badge-amber','COMPLETED':'badge-green','CANCELLED':'badge-red'}[ts.status] }}">
+    {{ {'SCHEDULED':'مجدولة','STARTED':'جارية','COMPLETED':'مكتملة','CANCELLED':'ملغاة'}[ts.status] }}
+  </span>
   <a class="btn btn-gold" href="/attendance/session/{{ ts.id }}/tv" target="_blank">📺 شاشة التحضير الكبيرة (TV)</a>
   <form method="post" action="/attendance/session/{{ ts.id }}/mark_all_present" onsubmit="return confirm('تحضير الجميع كحاضر؟ يمكنك تعديل الحالات الفردية بعدها.');">
     <button class="btn btn-outline" type="submit">✅ تحضير الجميع حاضر</button>
   </form>
+  {% if ts.status == 'COMPLETED' %}
+  <form method="post" action="/attendance/session/{{ ts.id }}/reopen" onsubmit="return confirm('إعادة فتح هذه الحصة؟ يمكنك بعدها إكمال أو تعديل التحضير من جديد.');">
+    <button class="btn btn-gold" type="submit">🔄 إعادة فتح الحصة — ابدأ من جديد</button>
+  </form>
+  {% else %}
   <a class="btn btn-gold" href="/attendance/session/{{ ts.id }}/end">🏁 إنهاء الحصة — لحظة فوق</a>
+  {% endif %}
 </div>
+
+{% if can_override %}
+<div class="card section" id="bulk-toolbar">
+  <div class="card-title">⚡ تعديل/إلغاء دفعة واحدة</div>
+  <div class="flex gap-8 flex-wrap items-center" style="margin-bottom:8px;">
+    <label class="flex items-center gap-4" style="font-size:13px;">
+      <input type="checkbox" id="select-all"> تحديد الكل
+    </label>
+    <span class="muted" id="selected-count" style="font-size:12.5px;">لا يوجد تحديد</span>
+  </div>
+  <div class="flex gap-8 flex-wrap" style="margin-bottom:8px;">
+    <span class="muted" style="font-size:12.5px; align-self:center;">تعديل حالة المحددين إلى:</span>
+    {% for st, label in [('PRESENT','حاضر'),('LATE','متأخر'),('ABSENT','غائب'),('EXCUSED','بعذر')] %}
+      <button type="button" class="btn btn-sm btn-outline bulk-set-btn" data-status="{{ st }}">{{ label }}</button>
+    {% endfor %}
+  </div>
+  <div class="flex gap-8 flex-wrap">
+    <button type="button" class="btn btn-sm btn-danger" id="bulk-cancel-selected">🗑️ إلغاء تحضير المحددين</button>
+    <button type="button" class="btn btn-sm btn-danger" id="bulk-cancel-all">🗑️ إلغاء تحضير الجميع</button>
+  </div>
+</div>
+{% endif %}
 
 <div class="attendance-grid section">
   {% for p in roster %}
-  <div class="attend-card status-{{ p.attendance_status or '' }}" id="card-{{ p.id }}" data-code="{{ p.player_code }}">
+  <div class="attend-card status-{{ p.attendance_status or '' }}" id="card-{{ p.id }}" data-code="{{ p.player_code }}" data-player="{{ p.id }}">
     <div class="player-card" style="padding:0;">
+      {% if can_override %}
+      <input type="checkbox" class="select-player" data-player="{{ p.id }}" style="width:18px; height:18px; margin-left:6px;">
+      {% endif %}
       <div class="avatar">{% if p.photo_url %}<img src="{{ p.photo_url }}" alt="">{% else %}{{ p.first_name[0] }}{% endif %}</div>
       <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div><small>{{ p.player_code }}</small></div>
     </div>
@@ -87,5 +121,71 @@ document.querySelectorAll(".status-btn").forEach(btn => {
     }
   });
 });
+
+// ⚡ تعديل/إلغاء دفعة واحدة — تحديد فردي/جماعي
+const selectAllBox = document.getElementById("select-all");
+const selectedCountEl = document.getElementById("selected-count");
+
+function selectedPlayerIds() {
+  return Array.from(document.querySelectorAll(".select-player:checked")).map(cb => cb.dataset.player);
+}
+
+function updateSelectedCount() {
+  const n = selectedPlayerIds().length;
+  if (selectedCountEl) selectedCountEl.textContent = n ? `${n} محدد` : "لا يوجد تحديد";
+}
+
+if (selectAllBox) {
+  selectAllBox.addEventListener("change", () => {
+    document.querySelectorAll(".select-player").forEach(cb => cb.checked = selectAllBox.checked);
+    updateSelectedCount();
+  });
+  document.querySelectorAll(".select-player").forEach(cb => cb.addEventListener("change", updateSelectedCount));
+}
+
+document.querySelectorAll(".bulk-set-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const ids = selectedPlayerIds();
+    if (!ids.length) { alert("حدد لاعبًا واحدًا على الأقل أولًا."); return; }
+    const status = btn.dataset.status;
+    const res = await postJSON(`/attendance/session/${sessionId}/bulk_mark`, { player_ids: ids, status });
+    if (res.ok) {
+      toast(feedback, `✅ تم تعديل حالة ${res.updated} من ${res.total} لاعب`, true);
+      location.reload();
+    } else {
+      alert(res.message || "تعذّر التعديل الجماعي");
+    }
+  });
+});
+
+const bulkCancelSelected = document.getElementById("bulk-cancel-selected");
+if (bulkCancelSelected) {
+  bulkCancelSelected.addEventListener("click", async () => {
+    const ids = selectedPlayerIds();
+    if (!ids.length) { alert("حدد لاعبًا واحدًا على الأقل أولًا."); return; }
+    if (!confirm(`إلغاء تحضير ${ids.length} لاعب محدد؟ سيتم عكس أي خصم حصة أو نقاط إنجاز مرتبطة تلقائيًا.`)) return;
+    const res = await postJSON(`/attendance/session/${sessionId}/bulk_cancel`, { player_ids: ids });
+    if (res.ok) {
+      toast(feedback, `↺ تم إلغاء تحضير ${res.cancelled} لاعب`, true);
+      location.reload();
+    } else {
+      alert(res.message || "تعذّر الإلغاء الجماعي");
+    }
+  });
+}
+
+const bulkCancelAll = document.getElementById("bulk-cancel-all");
+if (bulkCancelAll) {
+  bulkCancelAll.addEventListener("click", async () => {
+    if (!confirm("إلغاء تحضير جميع اللاعبين في هذه الحصة؟ سيتم عكس أي خصم حصة أو نقاط إنجاز مرتبطة تلقائيًا. لا يمكن التراجع عن هذا الإجراء إلا بإعادة التحضير يدويًا.")) return;
+    const res = await postJSON(`/attendance/session/${sessionId}/bulk_cancel`, { all: true });
+    if (res.ok) {
+      toast(feedback, `↺ تم إلغاء تحضير ${res.cancelled} لاعب`, true);
+      location.reload();
+    } else {
+      alert(res.message || "تعذّر الإلغاء الجماعي");
+    }
+  });
+}
 </script>
 {% endblock %}
