@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import Blueprint, render_template, request, redirect, g, flash, Response, abort
+from flask import Blueprint, render_template, request, redirect, g, flash, Response, abort, jsonify
 from datetime import date
 from db import get_conn, q, q1, ex
 from business.rbac import login_required, permission_required, branch_scope, coach_group_ids, roles_required
@@ -86,6 +86,63 @@ def list_players():
     conn.close()
     return render_template("players_list.html", players=players, groups=groups,
                             group_filter=group_filter, status_filter=status_filter)
+
+
+@bp.route("/players/bulk/set-active", methods=["POST"])
+@permission_required("manage_players")
+def bulk_set_active():
+    """🟥 تعطيل/تفعيل حساب لاعبين محددين دفعة واحدة — نفس منطق التعطيل
+    الفردي المُختبر لكل لاعب (لا يحذف أي بيانات أو تاريخ، فقط يمنع/يسمح
+    بتسجيل الدخول)."""
+    data = request.get_json(force=True)
+    player_ids = data.get("player_ids", [])
+    active = bool(data.get("active"))
+    conn = get_conn()
+    updated, skipped = 0, 0
+    for pid in player_ids:
+        player = q1(conn, "SELECT * FROM players WHERE id=?", (int(pid),))
+        if not player or not player["user_id"]:
+            skipped += 1
+            continue
+        try:
+            set_account_active(conn, player["user_id"], active, g.user["id"])
+            updated += 1
+        except AccountError:
+            skipped += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "updated": updated, "skipped": skipped})
+
+
+@bp.route("/players/bulk/move-group", methods=["POST"])
+@permission_required("manage_players")
+def bulk_move_group():
+    """🟨 نقل لاعبين محددين إلى مجموعة أخرى دفعة واحدة — يحدّث المجموعة
+    والمدرب والفئة والفرع ليتطابقوا مع المجموعة الجديدة، بدون أي حذف
+    لبيانات اللاعب أو تاريخه (حضور/نقاط/إنجازات كلها تبقى كما هي)."""
+    data = request.get_json(force=True)
+    player_ids = data.get("player_ids", [])
+    group_id = data.get("group_id")
+    if not group_id:
+        return jsonify({"ok": False, "message": "اختر مجموعة الوجهة أولًا"}), 400
+    conn = get_conn()
+    group = q1(conn, "SELECT * FROM groups_ WHERE id=?", (group_id,))
+    if not group:
+        conn.close()
+        return jsonify({"ok": False, "message": "المجموعة غير موجودة"}), 404
+    updated = 0
+    for pid in player_ids:
+        player = q1(conn, "SELECT * FROM players WHERE id=?", (int(pid),))
+        if not player:
+            continue
+        ex(conn, "UPDATE players SET group_id=?, coach_id=?, category_id=?, branch_id=? WHERE id=?",
+           (group["id"], group["coach_id"], group["category_id"], group["branch_id"], int(pid)))
+        audit_log(conn, g.user["id"], "BULK_MOVE_GROUP", "players", int(pid),
+                  before={"group_id": player["group_id"]}, after={"group_id": group["id"]})
+        updated += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "updated": updated, "group_name": group["name"]})
 
 
 @bp.route("/players/new", methods=["GET", "POST"])
