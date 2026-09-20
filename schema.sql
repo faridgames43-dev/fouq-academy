@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
     branch_id INTEGER REFERENCES branches(id),
     active INTEGER NOT NULL DEFAULT 1,
     avatar_url TEXT,
+    must_reset_password INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -196,6 +197,8 @@ CREATE TABLE IF NOT EXISTS training_sessions (
     end_time TEXT NOT NULL,
     goal TEXT,
     status TEXT NOT NULL DEFAULT 'SCHEDULED' CHECK(status IN ('SCHEDULED','STARTED','COMPLETED','CANCELLED')),
+    player_of_session_id INTEGER REFERENCES players(id),
+    session_note TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -291,6 +294,7 @@ CREATE TABLE IF NOT EXISTS points_transactions (
     balance_before INTEGER NOT NULL,
     balance_after INTEGER NOT NULL,
     training_session_id INTEGER,
+    note TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -309,6 +313,35 @@ CREATE TABLE IF NOT EXISTS player_achievements (
     achievement_id INTEGER NOT NULL REFERENCES achievements(id),
     earned_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(player_id, achievement_id)
+);
+
+CREATE TABLE IF NOT EXISTS challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    icon TEXT DEFAULT '🎯',
+    points_reward INTEGER NOT NULL DEFAULT 15,
+    target_type TEXT NOT NULL,
+    target_value INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS player_challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_id INTEGER NOT NULL REFERENCES players(id),
+    challenge_id INTEGER NOT NULL REFERENCES challenges(id),
+    assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','COMPLETED','EXPIRED')),
+    completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS subscription_alerts_sent (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    threshold TEXT NOT NULL,
+    sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(subscription_id, threshold)
 );
 
 CREATE TABLE IF NOT EXISTS rewards (

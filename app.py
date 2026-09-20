@@ -1,6 +1,6 @@
 import os
 from flask import Flask, session, redirect, url_for, g, request, render_template
-from db import get_conn, q1, init_db
+from db import get_conn, q1, init_db, migrate_db
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,6 +14,7 @@ def create_app():
 
     if not os.path.exists(os.path.join(BASE_DIR, "data", "academy.db")):
                 from seed import main as seed_main; seed_main()
+    migrate_db()
 
     @app.before_request
     def load_user():
