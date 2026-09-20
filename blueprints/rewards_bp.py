@@ -2,10 +2,10 @@ import os
 import uuid
 from flask import Blueprint, render_template, request, redirect, g, flash, abort
 from db import get_conn, q, q1
-from business.rbac import permission_required, login_required
+from business.rbac import permission_required, login_required, parent_player_ids
 from business.rewards import (
     list_rewards, get_reward, create_reward, update_reward,
-    request_redemption, update_redemption_status, RewardError,
+    request_redemption, update_redemption_status, player_redemptions, RewardError,
 )
 from business.points import get_balance
 
@@ -113,7 +113,22 @@ def store():
     conn = get_conn()
     if g.user["role"] == "PLAYER":
         player = q1(conn, "SELECT * FROM players WHERE user_id=?", (g.user["id"],))
+    elif g.user["role"] == "PARENT":
+        player_id = request.args.get("player_id")
+        owned = parent_player_ids(conn, g.user["id"])
+        try:
+            player_id_int = int(player_id) if player_id else None
+        except ValueError:
+            player_id_int = None
+        if not player_id_int or player_id_int not in owned:
+            # real backend check — a parent cannot view/redeem for a child
+            # that isn't linked to their own account, no matter what
+            # player_id is passed in the query string.
+            conn.close()
+            abort(403)
+        player = q1(conn, "SELECT * FROM players WHERE id=?", (player_id_int,))
     else:
+        # staff roles (admin/coach) acting on behalf of a player they manage
         player_id = request.args.get("player_id")
         player = q1(conn, "SELECT * FROM players WHERE id=?", (player_id,)) if player_id else None
     if not player:
@@ -132,5 +147,7 @@ def store():
 
     rewards = list_rewards(conn)
     balance = get_balance(conn, player["id"])
+    redemptions = player_redemptions(conn, player["id"])[:10]
     conn.close()
-    return render_template("rewards_store.html", rewards=rewards, balance=balance, player=player)
+    return render_template("rewards_store.html", rewards=rewards, balance=balance, player=player,
+                            redemptions=redemptions)

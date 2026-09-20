@@ -11,8 +11,9 @@ from business.points import get_balance as points_balance, get_history as points
 from business.assessments import player_development_timeline, child_label
 from business.renewal_risk import compute_risk
 from business.rewards import player_redemptions
-from business.barcode import render_code39
+from business.barcode import render_code39, render_qr
 from business.audit import log as audit_log
+from business.accounts import create_user_account, find_parent_by_phone, reset_password, set_account_active, AccountError
 
 bp = Blueprint("players", __name__)
 
@@ -95,20 +96,40 @@ def new_player():
         f = request.form
         code = f.get("player_code") or f"FOUQ-{9000 + (q1(conn, 'SELECT COUNT(*) c FROM players')['c'] + 1)}"
         parent_id = f.get("parent_id") or None
+        parent_password = None
+        parent_phone = (f.get("parent_phone") or "").strip() or None
+        parent_account_note = None
+
         if not parent_id and f.get("parent_name"):
-            from werkzeug.security import generate_password_hash
-            uid = ex(conn, "INSERT INTO users(name,phone,password_hash,role) VALUES (?,?,?,?)",
-                      (f.get("parent_name"), f.get("parent_phone"), generate_password_hash("Fouq@2026"), "PARENT"))
-            parent_id = ex(conn, "INSERT INTO parents(user_id, name, phone) VALUES (?,?,?)",
-                           (uid, f.get("parent_name"), f.get("parent_phone")))
+            # Smart dedup: if a parent with this exact phone already exists,
+            # link the new child to that SAME account instead of creating a
+            # duplicate one — this is checked regardless of whether the admin
+            # remembered to pick them from the dropdown.
+            existing_parent = find_parent_by_phone(conn, parent_phone)
+            if existing_parent:
+                parent_id = existing_parent["id"]
+                parent_account_note = f"تم ربط الطفل بحساب ولي الأمر الموجود مسبقًا ({existing_parent['name']})"
+            else:
+                uid, parent_password = create_user_account(conn, f.get("parent_name"), "PARENT", phone=parent_phone)
+                parent_id = ex(conn, "INSERT INTO parents(user_id, name, phone) VALUES (?,?,?)",
+                               (uid, f.get("parent_name"), parent_phone))
+                parent_account_note = "حساب ولي أمر جديد"
+
         photo_url = _save_player_photo(request.files.get("photo"), code)
-        pid = ex(conn, """INSERT INTO players(player_code, first_name, last_name, photo_url, dob, gender, category_id,
-                          branch_id, group_id, coach_id, player_type, join_date, referral_code, onboarding_json)
-                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                 (code, f.get("first_name"), f.get("last_name"), photo_url, f.get("dob"), f.get("gender", "M"),
-                  f.get("category_id"), f.get("branch_id"), f.get("group_id") or None, f.get("coach_id") or None,
-                  f.get("player_type", "FOUQ"), date.today().isoformat(), f"REF-{code}",
-                  '{"account_created": true, "parent_linked": true, "group_assigned": true}'))
+
+        # Every new player also gets their own PLAYER-role login account.
+        player_uid, player_password = create_user_account(
+            conn, f"{f.get('first_name')} {f.get('last_name')}", "PLAYER", phone=None,
+        )
+
+        pid = ex(conn, """INSERT INTO players(player_code, user_id, first_name, last_name, photo_url, dob, gender,
+                          category_id, branch_id, group_id, coach_id, player_type, join_date, referral_code,
+                          onboarding_json)
+                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 (code, player_uid, f.get("first_name"), f.get("last_name"), photo_url, f.get("dob"),
+                  f.get("gender", "M"), f.get("category_id"), f.get("branch_id"), f.get("group_id") or None,
+                  f.get("coach_id") or None, f.get("player_type", "FOUQ"), date.today().isoformat(), f"REF-{code}",
+                  '{"account_created": true, "parent_linked": true, "group_assigned": true, "qr_issued": true}'))
         if parent_id:
             ex(conn, "INSERT INTO parent_players(parent_id, player_id) VALUES (?,?)", (parent_id, pid))
         ex(conn, "INSERT INTO points_wallets(player_id, balance) VALUES (?,0)", (pid,))
@@ -122,7 +143,12 @@ def new_player():
         audit_log(conn, g.user["id"], "CREATE_PLAYER", "players", pid, after={k: v for k, v in f.items()})
         conn.commit()
         conn.close()
-        flash("تم إنشاء اللاعب بنجاح")
+        flash(f"تم إنشاء اللاعب بنجاح — رقم فوق: {code}")
+        flash(f"🔑 بيانات دخول اللاعب — كود اللاعب: {code} / كلمة المرور: {player_password} (تُعرض مرة واحدة فقط)")
+        if parent_password:
+            flash(f"🔑 بيانات دخول ولي الأمر — الجوال: {parent_phone} / كلمة المرور: {parent_password} (تُعرض مرة واحدة فقط)")
+        elif parent_account_note:
+            flash(parent_account_note)
         return redirect(f"/players/{pid}")
 
     branches = q(conn, "SELECT * FROM branches WHERE active=1")
@@ -202,6 +228,77 @@ def barcode(player_id):
         abort(404)
     png = render_code39(player["player_code"])
     return Response(png, mimetype="image/png")
+
+
+@bp.route("/players/<int:player_id>/qr.png")
+@login_required
+def qr(player_id):
+    conn = get_conn()
+    player = q1(conn, "SELECT player_code FROM players WHERE id=?", (player_id,))
+    conn.close()
+    if not player:
+        abort(404)
+    png = render_qr(player["player_code"])
+    return Response(png, mimetype="image/png")
+
+
+@bp.route("/players/<int:player_id>/account/reset-password", methods=["POST"])
+@permission_required("manage_players")
+def reset_player_password(player_id):
+    conn = get_conn()
+    player = q1(conn, "SELECT * FROM players WHERE id=?", (player_id,))
+    if not player or not player["user_id"]:
+        conn.close()
+        flash("لا يوجد حساب دخول لهذا اللاعب")
+        return redirect(f"/players/{player_id}")
+    try:
+        new_password = reset_password(conn, player["user_id"], g.user["id"])
+        conn.commit()
+        flash(f"🔑 كلمة المرور الجديدة للاعب: {new_password} (تُعرض مرة واحدة فقط)")
+    except AccountError as e:
+        flash(str(e))
+    conn.close()
+    return redirect(f"/players/{player_id}")
+
+
+@bp.route("/players/<int:player_id>/account/toggle-active", methods=["POST"])
+@permission_required("manage_players")
+def toggle_player_account(player_id):
+    conn = get_conn()
+    player = q1(conn, "SELECT * FROM players WHERE id=?", (player_id,))
+    if not player or not player["user_id"]:
+        conn.close()
+        flash("لا يوجد حساب دخول لهذا اللاعب")
+        return redirect(f"/players/{player_id}")
+    user = q1(conn, "SELECT active FROM users WHERE id=?", (player["user_id"],))
+    try:
+        set_account_active(conn, player["user_id"], not user["active"], g.user["id"])
+        conn.commit()
+        flash("تم تعطيل حساب اللاعب (بياناته وتاريخه محفوظ بالكامل)" if user["active"] else "تم إعادة تفعيل حساب اللاعب")
+    except AccountError as e:
+        flash(str(e))
+    conn.close()
+    return redirect(f"/players/{player_id}")
+
+
+@bp.route("/players/<int:player_id>/account/reset-parent-password", methods=["POST"])
+@permission_required("manage_players")
+def reset_parent_password(player_id):
+    conn = get_conn()
+    parent = q1(conn, """SELECT pr.* FROM parents pr JOIN parent_players pp ON pp.parent_id=pr.id
+                         WHERE pp.player_id=?""", (player_id,))
+    if not parent or not parent["user_id"]:
+        conn.close()
+        flash("لا يوجد حساب دخول لولي الأمر")
+        return redirect(f"/players/{player_id}")
+    try:
+        new_password = reset_password(conn, parent["user_id"], g.user["id"])
+        conn.commit()
+        flash(f"🔑 كلمة المرور الجديدة لولي الأمر: {new_password} (تُعرض مرة واحدة فقط)")
+    except AccountError as e:
+        flash(str(e))
+    conn.close()
+    return redirect(f"/players/{player_id}")
 
 
 @bp.route("/players/<int:player_id>/override", methods=["POST"])

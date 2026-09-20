@@ -37,6 +37,12 @@ def login():
         password = request.form.get("password", "")
         conn = get_conn()
         user = q1(conn, "SELECT * FROM users WHERE email=? OR phone=?", (identifier, identifier))
+        if not user:
+            # players log in with their FOUQ player code instead of an email/phone
+            player = q1(conn, "SELECT user_id FROM players WHERE player_code=? AND user_id IS NOT NULL",
+                        (identifier,))
+            if player:
+                user = q1(conn, "SELECT * FROM users WHERE id=?", (player["user_id"],))
         conn.close()
         if user and check_password_hash(user["password_hash"], password) and user["active"]:
             session["user_id"] = user["id"]

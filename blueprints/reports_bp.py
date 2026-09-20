@@ -1,12 +1,27 @@
 from flask import Blueprint, render_template, request, Response, g, abort, send_file
 from datetime import date, timedelta
 from db import get_conn, q, q1
-from business.rbac import permission_required, branch_scope
+from business.rbac import permission_required, branch_scope, login_required, parent_player_ids
 from business import reports as rep
 from business.dashboard import kpis
 from business.pdf_export import build_generic_report_pdf, build_monthly_report_pdf, build_player_report_pdf
 
 bp = Blueprint("reports_bp", __name__)
+
+
+def _can_view_player_report(conn, player_id):
+    """Real backend ownership check — not just a hidden button. Admin/coach
+    roles keep their existing access; a PARENT may only see a report for a
+    child actually linked to their account, and a PLAYER only their own."""
+    role = g.user["role"]
+    if role in ("SUPER_ADMIN", "PROJECT_MANAGER", "BRANCH_MANAGER", "SUPERVISOR"):
+        return True
+    if role == "PLAYER":
+        player = q1(conn, "SELECT id FROM players WHERE id=? AND user_id=?", (player_id, g.user["id"]))
+        return player is not None
+    if role == "PARENT":
+        return player_id in parent_player_ids(conn, g.user["id"])
+    return False
 
 REPORT_TYPES = [
     ("outstanding", "تقرير الحصص المستحقة"),
@@ -109,8 +124,13 @@ def monthly_print():
 
 
 @bp.route("/reports/player/<int:player_id>/pdf")
-@permission_required("view_reports")
+@login_required
 def player_pdf(player_id):
+    conn = get_conn()
+    allowed = _can_view_player_report(conn, player_id)
+    conn.close()
+    if not allowed:
+        abort(403)
     ctx = _player_report_context(player_id)
     if ctx is None:
         abort(404)
@@ -148,13 +168,16 @@ def _player_report_context(player_id):
 
 
 @bp.route("/reports/player/<int:player_id>/print")
-@permission_required("view_reports")
+@login_required
 def player_print(player_id):
     from business.entitlements import get_balances
     from business.assessments import player_development_timeline, child_label
     from business.levels import current_level
     from business.points import get_balance
     conn = get_conn()
+    if not _can_view_player_report(conn, player_id):
+        conn.close()
+        abort(403)
     player = q1(conn, """SELECT p.*, c.name as category_name, gr.name as group_name, co.name as coach_name,
                          b.name as branch_name FROM players p LEFT JOIN categories c ON c.id=p.category_id
                          LEFT JOIN groups_ gr ON gr.id=p.group_id LEFT JOIN coaches co ON co.id=p.coach_id

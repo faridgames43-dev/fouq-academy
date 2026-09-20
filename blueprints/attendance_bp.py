@@ -4,8 +4,10 @@ from db import get_conn, q, q1, ex
 from business.rbac import login_required, permission_required, coach_group_ids, branch_scope
 from business import attendance as att
 from business import achievements as ach
+from business import challenges as chal
 from business.audit import log as audit_log
-from business.points import get_balance as points_balance
+from business.points import get_balance as points_balance, ADD_REASONS, SUBTRACT_REASONS, PointsError
+from business.points import award_points
 from business.levels import current_level
 
 bp = Blueprint("attendance_bp", __name__)
@@ -68,6 +70,7 @@ def mark(session_id):
         result = att.mark_attendance(conn, session_id, data["player_id"], data["status"], g.user["id"],
                                       allow_override=data.get("override", False))
         ach.check_after_attendance(conn, data["player_id"], g.user["id"])
+        chal.check_and_complete(conn, data["player_id"], g.user["id"])
         conn.commit()
         conn.close()
         return jsonify({"ok": True, **result})
@@ -84,6 +87,7 @@ def scan(session_id):
     try:
         result = att.checkin_by_code(conn, session_id, code, g.user["id"])
         ach.check_after_attendance(conn, result["player"]["id"], g.user["id"])
+        chal.check_and_complete(conn, result["player"]["id"], g.user["id"])
         conn.commit()
         player = result["player"]
         pts = points_balance(conn, player["id"])
@@ -141,24 +145,95 @@ def cancel(attendance_id):
     return redirect(f"/attendance/session/{session_id}" if session_id else "/attendance")
 
 
+def _finalize_session(conn, session_id, force=False):
+    """Returns True if the session was closed, False if it needs the roster
+    completed first (and force wasn't set)."""
+    ts = q1(conn, "SELECT * FROM training_sessions WHERE id=?", (session_id,))
+    roster_count = q1(conn, "SELECT COUNT(*) c FROM players WHERE group_id=?", (ts["group_id"],))["c"]
+    marked_count = q1(conn, "SELECT COUNT(*) c FROM attendance WHERE training_session_id=?", (session_id,))["c"]
+    if marked_count < roster_count and not force:
+        flash(f"تنبيه: لم يتم تحضير {roster_count - marked_count} لاعب من القائمة. أكمل التحضير أولًا أو أكّد التجاوز.")
+        return False
+    ex(conn, "UPDATE training_sessions SET status='COMPLETED' WHERE id=?", (session_id,))
+    audit_log(conn, g.user["id"], "COMPLETE_SESSION", "training_sessions", session_id)
+    return True
+
+
 @bp.route("/attendance/session/<int:session_id>/complete", methods=["POST"])
 @permission_required("take_attendance")
 def complete(session_id):
     conn = get_conn()
-    ts = q1(conn, "SELECT * FROM training_sessions WHERE id=?", (session_id,))
-    roster_count = q1(conn, "SELECT COUNT(*) c FROM players WHERE group_id=?", (ts["group_id"],))["c"]
-    marked_count = q1(conn, "SELECT COUNT(*) c FROM attendance WHERE training_session_id=?", (session_id,))["c"]
-    if marked_count < roster_count:
-        flash(f"تنبيه: لم يتم تحضير {roster_count - marked_count} لاعب من القائمة. أكمل التحضير أولًا أو أكّد التجاوز.")
-        if request.form.get("force") != "1":
-            conn.close()
-            return redirect(f"/attendance/session/{session_id}")
-    ex(conn, "UPDATE training_sessions SET status='COMPLETED' WHERE id=?", (session_id,))
-    audit_log(conn, g.user["id"], "COMPLETE_SESSION", "training_sessions", session_id)
+    closed = _finalize_session(conn, session_id, force=request.form.get("force") == "1")
     conn.commit()
     conn.close()
-    flash("تم إغلاق الحصة بنجاح ✅")
-    return redirect("/attendance")
+    if closed:
+        flash("تم إغلاق الحصة بنجاح ✅")
+        return redirect("/attendance")
+    return redirect(f"/attendance/session/{session_id}")
+
+
+@bp.route("/attendance/session/<int:session_id>/end", methods=["GET", "POST"])
+@permission_required("take_attendance")
+def end_session(session_id):
+    """لحظة فوق: شاشة سريعة واحدة (أقل من دقيقة) يختار فيها المدرب لاعب
+    الحصة، يمنح/يخصم نقاطًا سريعة، يمنح إنجازًا، ويكتب ملاحظة مختصرة —
+    ثم تُغلق الحصة فورًا."""
+    conn = get_conn()
+    ts = q1(conn, "SELECT ts.*, g.name as group_name FROM training_sessions ts JOIN groups_ g ON g.id=ts.group_id WHERE ts.id=?",
+            (session_id,))
+    if not ts:
+        conn.close()
+        abort(404)
+    roster = q(conn, "SELECT id, first_name, last_name, photo_url FROM players WHERE group_id=? ORDER BY first_name",
+               (ts["group_id"],))
+
+    if request.method == "POST":
+        already_completed = ts["status"] == "COMPLETED"
+        pos_id = request.form.get("player_of_session") or None
+        note = (request.form.get("note") or "").strip() or None
+        amount_raw = request.form.get("amount") or "0"
+        reason = (request.form.get("reason") or "").strip()
+        target_player = request.form.get("points_player_id") or None
+        manual_achievement = request.form.get("achievement") or None
+
+        if not already_completed:
+            if pos_id:
+                ex(conn, "UPDATE training_sessions SET player_of_session_id=? WHERE id=?", (pos_id, session_id))
+                ach.award_manual(conn, int(pos_id), "PLAYER_OF_SESSION", g.user["id"])
+                try:
+                    award_points(conn, int(pos_id), 10, "لاعب الحصة", "ACHIEVEMENT", g.user["id"])
+                except PointsError:
+                    pass
+                ach.check_after_points(conn, int(pos_id), g.user["id"])
+
+            try:
+                amount = int(amount_raw)
+            except ValueError:
+                amount = 0
+            if amount and target_player and reason:
+                try:
+                    award_points(conn, int(target_player), amount, reason, "ADMIN", g.user["id"])
+                    ach.check_after_points(conn, int(target_player), g.user["id"])
+                    if reason == "الروح الرياضية":
+                        ach.award_manual(conn, int(target_player), "TEAM_SPIRIT", g.user["id"])
+                except PointsError as e:
+                    flash(str(e))
+
+            if manual_achievement and target_player:
+                ach.award_manual(conn, int(target_player), manual_achievement, g.user["id"])
+
+            if note:
+                ex(conn, "UPDATE training_sessions SET session_note=? WHERE id=?", (note, session_id))
+
+        closed = _finalize_session(conn, session_id, force=True)
+        conn.commit()
+        conn.close()
+        flash("تم إغلاق الحصة وتسجيل لحظة فوق بنجاح ✅")
+        return redirect("/attendance")
+
+    conn.close()
+    return render_template("session_end.html", ts=ts, roster=roster, add_reasons=ADD_REASONS,
+                            subtract_reasons=SUBTRACT_REASONS)
 
 
 @bp.route("/attendance/new", methods=["GET", "POST"])
