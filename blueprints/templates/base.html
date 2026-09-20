@@ -35,6 +35,7 @@
         <div class="section-label">التطوير والمكافآت</div>
         {{ item('/levels', '⬆️', 'المستويات') }}
         {{ item('/rewards', '🎁', 'متجر فوق') }}
+        {{ item('/assignments', '📋', 'مهام اللاعبين') }}
         <div class="section-label">النمو والعملاء</div>
         {{ item('/leads', '📞', 'العملاء المحتملون') }}
         <div class="section-label">تقارير وإدارة</div>
@@ -47,11 +48,13 @@
         {{ item('/coach', '🏠', 'لوحتي') }}
         {{ item('/attendance', '✅', 'التحضير') }}
         {{ item('/players', '🧒', 'لاعبيّ') }}
+        {{ item('/assignments', '📋', 'مهام اللاعبين') }}
       {% elif role == 'PARENT' %}
         {{ item('/parent', '🏠', 'أبنائي') }}
       {% elif role == 'PLAYER' %}
         {{ item('/me', '🏠', 'حسابي') }}
         {{ item('/rewards/store', '🎁', 'متجر فوق') }}
+        {{ item('/me/assignments', '📋', 'مهامي') }}
       {% endif %}
     </nav>
     <div class="user-box">

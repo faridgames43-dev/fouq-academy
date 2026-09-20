@@ -20,13 +20,40 @@
   {% endif %}
 </div>
 
+{% set can_bulk = current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+{% if can_bulk %}
+<div class="card section" id="bulk-toolbar">
+  <div class="card-title">⚡ إجراء جماعي على اللاعبين المحددين</div>
+  <div class="flex gap-8 flex-wrap items-center" style="margin-bottom:8px;">
+    <label class="flex items-center gap-4" style="font-size:13px;">
+      <input type="checkbox" id="select-all-players"> تحديد الكل
+    </label>
+    <span class="muted" id="selected-players-count" style="font-size:12.5px;">لا يوجد تحديد</span>
+  </div>
+  <div class="flex gap-8 flex-wrap items-center">
+    <button type="button" class="btn btn-sm btn-outline" id="bulk-activate">✅ تفعيل حسابات المحددين</button>
+    <button type="button" class="btn btn-sm btn-danger" id="bulk-deactivate">⛔ تعطيل حسابات المحددين</button>
+    <select id="bulk-move-group" class="field" style="min-width:180px;">
+      <option value="">انقل المحددين إلى مجموعة…</option>
+      {% for gr in groups %}<option value="{{ gr.id }}">{{ gr.name }}</option>{% endfor %}
+    </select>
+    <button type="button" class="btn btn-sm btn-primary" id="bulk-move-btn">نقل</button>
+  </div>
+</div>
+{% endif %}
+
 <div class="table-wrap">
   <table>
-    <thead><tr><th>اللاعب</th><th>الكود</th><th>الفئة</th><th>المجموعة</th><th>النوع</th>
+    <thead><tr>
+      {% if can_bulk %}<th></th>{% endif %}
+      <th>اللاعب</th><th>الكود</th><th>الفئة</th><th>المجموعة</th><th>النوع</th>
       <th>حالة الاشتراك</th><th>الأهلية للحضور</th><th>الحصص المتاحة</th><th></th></tr></thead>
     <tbody>
     {% for p in players %}
       <tr>
+        {% if can_bulk %}
+        <td><input type="checkbox" class="select-player-row" data-player="{{ p.id }}"></td>
+        {% endif %}
         <td>
           <div class="player-card" style="padding:4px 0;">
             <div class="avatar">{% if p.photo_url %}<img src="{{ p.photo_url }}" alt="">{% else %}{{ p.first_name[0] }}{% endif %}</div>
@@ -62,4 +89,65 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const selectAllPlayers = document.getElementById("select-all-players");
+const selectedPlayersCount = document.getElementById("selected-players-count");
+
+function selectedPlayerRowIds() {
+  return Array.from(document.querySelectorAll(".select-player-row:checked")).map(cb => cb.dataset.player);
+}
+
+function updateSelectedPlayersCount() {
+  const n = selectedPlayerRowIds().length;
+  if (selectedPlayersCount) selectedPlayersCount.textContent = n ? `${n} محدد` : "لا يوجد تحديد";
+}
+
+if (selectAllPlayers) {
+  selectAllPlayers.addEventListener("change", () => {
+    document.querySelectorAll(".select-player-row").forEach(cb => cb.checked = selectAllPlayers.checked);
+    updateSelectedPlayersCount();
+  });
+  document.querySelectorAll(".select-player-row").forEach(cb => cb.addEventListener("change", updateSelectedPlayersCount));
+}
+
+async function bulkSetActive(active) {
+  const ids = selectedPlayerRowIds();
+  if (!ids.length) { alert("حدد لاعبًا واحدًا على الأقل أولًا."); return; }
+  const label = active ? "تفعيل" : "تعطيل";
+  if (!confirm(`${label} حسابات ${ids.length} لاعب محدد؟`)) return;
+  const res = await postJSON("/players/bulk/set-active", { player_ids: ids, active });
+  if (res.ok) {
+    alert(`تم ${label} ${res.updated} حساب${res.skipped ? ` (تم تجاوز ${res.skipped} بدون حساب دخول)` : ""}`);
+    location.reload();
+  } else {
+    alert(res.message || "تعذّر تنفيذ الإجراء الجماعي");
+  }
+}
+
+const bulkActivateBtn = document.getElementById("bulk-activate");
+if (bulkActivateBtn) bulkActivateBtn.addEventListener("click", () => bulkSetActive(true));
+const bulkDeactivateBtn = document.getElementById("bulk-deactivate");
+if (bulkDeactivateBtn) bulkDeactivateBtn.addEventListener("click", () => bulkSetActive(false));
+
+const bulkMoveBtn = document.getElementById("bulk-move-btn");
+if (bulkMoveBtn) {
+  bulkMoveBtn.addEventListener("click", async () => {
+    const ids = selectedPlayerRowIds();
+    const groupId = document.getElementById("bulk-move-group").value;
+    if (!ids.length) { alert("حدد لاعبًا واحدًا على الأقل أولًا."); return; }
+    if (!groupId) { alert("اختر المجموعة الوجهة أولًا."); return; }
+    if (!confirm(`نقل ${ids.length} لاعب محدد إلى المجموعة المختارة؟`)) return;
+    const res = await postJSON("/players/bulk/move-group", { player_ids: ids, group_id: groupId });
+    if (res.ok) {
+      alert(`تم نقل ${res.updated} لاعب إلى ${res.group_name}`);
+      location.reload();
+    } else {
+      alert(res.message || "تعذّر النقل الجماعي");
+    }
+  });
+}
+</script>
 {% endblock %}

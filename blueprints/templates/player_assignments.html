@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}مهامي{% endblock %}
+{% block page_title %}📋 مهامي مع فوق{% endblock %}
+{% block content %}
+<div class="grid grid-2 section">
+  {% for a in assignments %}
+  <div class="card">
+    <div class="card-title">{{ a.title }}</div>
+    {% if a.description %}<p style="font-size:13px;">{{ a.description }}</p>{% endif %}
+    <div class="flex gap-8" style="margin:8px 0;">
+      {% if a.due_date %}<span class="badge badge-blue">يسلَّم قبل {{ a.due_date }}</span>{% endif %}
+      <span class="badge badge-amber">⭐ {{ a.points_reward }} نقطة عند الاعتماد</span>
+    </div>
+
+    {% set s = a.submission %}
+    {% if not s %}
+      <span class="badge badge-gray">لم تسلّم بعد</span>
+    {% elif s.status == 'PENDING' %}
+      <span class="badge badge-amber">تم التسليم {{ s.submitted_at }} — بانتظار مراجعة المدرب</span>
+    {% elif s.status == 'APPROVED' %}
+      <span class="badge badge-green">✅ معتمدة — حصلت على {{ a.points_reward }} نقطة!</span>
+    {% else %}
+      <span class="badge badge-red">مرفوضة{% if s.feedback_note %}: {{ s.feedback_note }}{% endif %} — يمكنك إعادة التسليم</span>
+    {% endif %}
+
+    {% if can_submit and (not s or s.status != 'APPROVED') %}
+    <form method="post" action="/me/assignments/{{ a.id }}/submit" enctype="multipart/form-data" style="margin-top:10px;">
+      <input type="file" name="file" accept="image/*,video/*,.pdf" required>
+      <button class="btn btn-sm btn-gold" type="submit" style="margin-top:6px;">📤 تسليم المهمة</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="emoji">📋</div><p>لا توجد مهام لمجموعتك حاليًا</p></div>
+  {% endfor %}
+</div>
+{% endblock %}

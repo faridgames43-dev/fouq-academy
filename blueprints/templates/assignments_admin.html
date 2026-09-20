@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}مهام اللاعبين{% endblock %}
+{% block page_title %}📋 مهام اللاعبين{% endblock %}
+{% block content %}
+<div class="section flex justify-between items-center">
+  <p class="muted" style="font-size:13px;">أنشئ مهمة لمجموعة، واللاعب يرفع ملف/فيديو كتسليم من حسابه — يظهر لك توقيت التسليم بدقة، وتعتمد أو ترفض مع منح نقاط فوق تلقائيًا عند الاعتماد.</p>
+  <a class="btn btn-gold" href="/assignments/new">+ مهمة جديدة</a>
+</div>
+
+<div class="grid grid-3 section">
+  {% for a in assignments %}
+  <div class="card">
+    <div class="card-title">{{ a.title }}</div>
+    <div class="muted" style="font-size:12.5px; margin-bottom:6px;">{{ a.group_name }}{% if a.due_date %} · يسلَّم قبل {{ a.due_date }}{% endif %}</div>
+    {% if a.description %}<p style="font-size:13px;">{{ a.description }}</p>{% endif %}
+    <div class="flex gap-8" style="margin:8px 0;">
+      <span class="badge badge-blue">⭐ {{ a.points_reward }} نقطة عند الاعتماد</span>
+      {% if a.pending_count %}<span class="badge badge-amber">{{ a.pending_count }} بانتظار المراجعة</span>{% endif %}
+    </div>
+    <div class="kpi-sub">{{ a.submitted_count }} / {{ a.roster_size }} سلّموا المهمة</div>
+    <div class="flex gap-8" style="margin-top:10px;">
+      <a class="btn btn-sm btn-gold" href="/assignments/{{ a.id }}" style="margin-right:auto;">مراجعة التسليمات ←</a>
+      <form method="post" action="/assignments/{{ a.id }}/toggle" onsubmit="return confirm('إيقاف هذه المهمة؟');">
+        <button class="btn btn-sm btn-outline" type="submit">إيقاف</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="emoji">📋</div><p>لا توجد مهام حاليًا</p></div>
+  {% endfor %}
+</div>
+{% endblock %}

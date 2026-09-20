@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}مراجعة المهمة{% endblock %}
+{% block page_title %}📋 {{ assignment.title }} — {{ assignment.group_name }}{% endblock %}
+{% block content %}
+<div class="card section">
+  {% if assignment.description %}<p>{{ assignment.description }}</p>{% endif %}
+  <div class="flex gap-8">
+    {% if assignment.due_date %}<span class="badge badge-blue">يسلَّم قبل {{ assignment.due_date }}</span>{% endif %}
+    <span class="badge badge-amber">⭐ {{ assignment.points_reward }} نقطة عند الاعتماد</span>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>اللاعب</th><th>الحالة</th><th>توقيت التسليم</th><th>الملف</th><th>ملاحظة المراجعة</th><th></th></tr></thead>
+    <tbody>
+    {% for p in roster %}
+      <tr>
+        <td>
+          <div class="player-card" style="padding:0;">
+            <div class="avatar">{% if p.photo_url %}<img src="{{ p.photo_url }}" alt="">{% else %}{{ p.first_name[0] }}{% endif %}</div>
+            <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div></div>
+          </div>
+        </td>
+        <td>
+          {% if not p.submission %}<span class="badge badge-gray">لم يسلّم بعد</span>
+          {% elif p.submission.status == 'PENDING' %}<span class="badge badge-amber">بانتظار المراجعة</span>
+          {% elif p.submission.status == 'APPROVED' %}<span class="badge badge-green">معتمد ✅</span>
+          {% else %}<span class="badge badge-red">مرفوض</span>{% endif %}
+        </td>
+        <td style="font-size:12.5px;">{{ p.submission.submitted_at if p.submission else '-' }}</td>
+        <td>
+          {% if p.submission %}
+            {% if p.submission.file_type == 'video' %}
+              <video src="{{ p.submission.file_url }}" controls style="max-width:140px; border-radius:8px;"></video>
+            {% elif p.submission.file_type == 'image' %}
+              <a href="{{ p.submission.file_url }}" target="_blank"><img src="{{ p.submission.file_url }}" style="max-width:80px; border-radius:8px;"></a>
+            {% else %}
+              <a href="{{ p.submission.file_url }}" target="_blank">📄 فتح الملف</a>
+            {% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td style="font-size:12.5px;">{{ p.submission.feedback_note or '-' if p.submission else '-' }}</td>
+        <td>
+          {% if p.submission and p.submission.status == 'PENDING' %}
+          <form method="post" action="/assignments/submission/{{ p.submission.id }}/review/APPROVED" style="display:inline;">
+            <button class="btn btn-sm btn-gold" type="submit">✅ اعتماد</button>
+          </form>
+          <form method="post" action="/assignments/submission/{{ p.submission.id }}/review/REJECTED" style="display:inline;" onsubmit="return confirm('رفض هذا التسليم؟ يقدر اللاعب يعيد التسليم من جديد.');">
+            <button class="btn btn-sm btn-danger" type="submit">رفض</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

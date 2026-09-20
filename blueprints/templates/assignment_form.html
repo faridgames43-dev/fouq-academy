@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}مهمة جديدة{% endblock %}
+{% block page_title %}📋 إنشاء مهمة جديدة{% endblock %}
+{% block content %}
+<form method="post">
+<div class="card" style="max-width:560px;">
+  <div class="field">
+    <label>المجموعة</label>
+    <select name="group_id" required>
+      <option value="">— اختر —</option>
+      {% for gr in groups %}<option value="{{ gr.id }}">{{ gr.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label>عنوان المهمة</label>
+    <input type="text" name="title" required placeholder="مثال: فيديو تمرين المراوغة">
+  </div>
+  <div class="field">
+    <label>الوصف (اختياري)</label>
+    <textarea name="description" rows="3" placeholder="اشرح المطلوب من اللاعب بالتفصيل…"></textarea>
+  </div>
+  <div class="form-grid">
+    <div class="field"><label>آخر موعد للتسليم (اختياري)</label><input type="date" name="due_date"></div>
+    <div class="field"><label>نقاط رصيد فوق عند الاعتماد</label><input type="number" name="points_reward" value="10" min="0"></div>
+  </div>
+  <button class="btn btn-gold btn-block" type="submit">إنشاء المهمة وإرسالها للمجموعة</button>
+</div>
+</form>
+{% endblock %}
