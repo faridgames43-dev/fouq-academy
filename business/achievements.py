@@ -90,6 +90,54 @@ def award_manual(conn, player_id, code, user_id):
     return _award_if_new(conn, player_id, code, user_id)
 
 
+def recheck_after_attendance_cancel(conn, player_id, user_id=None):
+    """After an attendance record is cancelled (single, bulk-selected, or
+    bulk-all), a purely attendance-COUNT-based achievement the player had
+    already earned may no longer be valid — e.g. FIRST_SESSION was granted
+    after their only PRESENT record, and that record just got cancelled.
+    Revoke it and reverse the points it awarded via the existing REVERSAL
+    ledger mechanism (never a silent balance edit / never a deleted log
+    row), so رصيد فوق always matches the honest attendance history.
+
+    Only the two strictly monotonic, deterministic thresholds are
+    reconsidered here (FIRST_SESSION, COMMITTED_10); order/time-dependent
+    ones (STREAK_5, PERFECT_ATTENDANCE) are intentionally left as-earned,
+    matching how most gamification systems treat streak badges."""
+    total_present = q1(
+        conn, "SELECT COUNT(*) c FROM attendance WHERE player_id=? AND status IN ('PRESENT','LATE')",
+        (player_id,),
+    )["c"]
+    revoked = []
+    for code, still_valid in (("FIRST_SESSION", total_present >= 1), ("COMMITTED_10", total_present >= 10)):
+        if still_valid:
+            continue
+        ach_row = q1(conn, "SELECT * FROM achievements WHERE code=?", (code,))
+        if not ach_row:
+            continue
+        pa = q1(conn, "SELECT * FROM player_achievements WHERE player_id=? AND achievement_id=?",
+                (player_id, ach_row["id"]))
+        if not pa:
+            continue
+        if ach_row["points_reward"]:
+            txn = q1(
+                conn,
+                """SELECT id FROM points_transactions WHERE player_id=? AND category='ACHIEVEMENT'
+                   AND reason=? ORDER BY id DESC LIMIT 1""",
+                (player_id, f"إنجاز: {ach_row['name']}"),
+            )
+            if txn:
+                from business.points import cancel_points_transaction, PointsError
+                try:
+                    cancel_points_transaction(conn, txn["id"], user_id)
+                except PointsError:
+                    pass
+        ex(conn, "DELETE FROM player_achievements WHERE id=?", (pa["id"],))
+        audit_log(conn, user_id, "REVOKE_ACHIEVEMENT", "player_achievements", pa["id"],
+                  before={"player_id": player_id, "achievement": code}, reason="إلغاء تحضير أثّر على الأهلية")
+        revoked.append(code)
+    return revoked
+
+
 def check_perfect_attendance(conn, player_id, user_id=None):
     """حضور كامل: لا غياب واحد خلال الشهر الحالي (بحد أدنى 4 حصص مسجّلة)."""
     from datetime import date
