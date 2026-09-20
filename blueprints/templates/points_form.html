@@ -1,20 +1,95 @@
 {% extends "base.html" %}
-{% block title %}إضافة رصيد فوق{% endblock %}
-{% block page_title %}إضافة رصيد فوق — {{ player.first_name }} {{ player.last_name }}{% endblock %}
+{% block title %}رصيد فوق{% endblock %}
+{% block page_title %}رصيد فوق ⭐ — {{ player.first_name }} {{ player.last_name }}{% endblock %}
 {% block content %}
-<div class="card" style="max-width:520px;">
+<div class="grid grid-2" style="align-items:start;">
+<div class="card">
   {% if current_user.role == 'COACH' %}
-    <p class="muted">كمدرب، لا يمكنك منح أكثر من {{ cap }} نقطة يوميًا لكل لاعب.</p>
+    <p class="muted" style="font-size:12.5px;">كمدرب، لا يمكنك منح أكثر من <b>{{ cap }}</b> نقطة يوميًا لكل لاعب
+      (تم منحه <b>{{ granted_today }}</b> نقطة اليوم).</p>
   {% endif %}
-  <form method="post">
-    <div class="field"><label>الكمية (يمكن أن تكون سالبة لتصحيح خطأ)</label><input type="number" name="amount" value="10" required></div>
-    <div class="field"><label>التصنيف</label>
-      <select name="category">
-        {% for k,v in categories.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-      </select>
-    </div>
-    <div class="field"><label>السبب</label><input name="reason" placeholder="مثال: التزام ممتاز هذا الأسبوع"></div>
-    <button class="btn btn-gold btn-block" type="submit">تأكيد</button>
-  </form>
+
+  <div class="field" style="max-width:160px;">
+    <label>عدد النقاط لهذه العملية</label>
+    <input type="number" id="pts-amount" min="1" max="200" value="5">
+  </div>
+
+  <div class="section-header"><h2>➕ إضافة رصيد</h2></div>
+  <div class="quick-points-grid">
+    {% for reason, category in add_reasons %}
+    <form method="post" class="qp-form">
+      <input type="hidden" name="amount" class="qp-amount-field">
+      <input type="hidden" name="category" value="{{ category }}">
+      <input type="hidden" name="reason" value="{{ reason }}">
+      <button type="submit" class="qp-btn qp-add" data-sign="1">{{ reason }}</button>
+    </form>
+    {% endfor %}
+  </div>
+
+  <div class="section-header" style="margin-top:18px;"><h2>➖ خصم رصيد</h2></div>
+  <div class="quick-points-grid">
+    {% for reason, category in subtract_reasons %}
+    <form method="post" class="qp-form">
+      <input type="hidden" name="amount" class="qp-amount-field">
+      <input type="hidden" name="category" value="{{ category }}">
+      <input type="hidden" name="reason" value="{{ reason }}">
+      <button type="submit" class="qp-btn qp-sub" data-sign="-1">{{ reason }}</button>
+    </form>
+    {% endfor %}
+  </div>
+
+  <details style="margin-top:18px;">
+    <summary class="muted" style="cursor:pointer;">سبب آخر / مخصص + ملاحظة</summary>
+    <form method="post" style="margin-top:12px;">
+      <div class="field"><label>الكمية (+ إضافة / - خصم)</label><input type="number" name="amount" value="5" required></div>
+      <div class="field"><label>السبب</label><input name="reason" placeholder="اكتب السبب" required></div>
+      <div class="field"><label>ملاحظة (اختياري)</label><textarea name="note" rows="2" placeholder="تفاصيل إضافية…"></textarea></div>
+      <input type="hidden" name="category" value="ADMIN">
+      <button class="btn btn-outline btn-block" type="submit">تأكيد المخصص</button>
+    </form>
+  </details>
 </div>
+
+<div class="card">
+  <div class="card-title">سجل عمليات رصيد فوق (لا يمكن حذفه — سجل كامل)</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>التاريخ</th><th>المدرب/المسؤول</th><th>السبب</th><th>النقاط</th><th>الرصيد بعدها</th><th></th></tr></thead>
+      <tbody>
+        {% for h in history %}
+        <tr>
+          <td>{{ h.created_at[:16] }}</td>
+          <td>{{ h.coach_name or '-' }}</td>
+          <td>{{ h.reason }}{% if h.note %}<div class="muted" style="font-size:11px;">{{ h.note }}</div>{% endif %}</td>
+          <td style="font-weight:800; color: {{ 'var(--green)' if h.amount > 0 else 'var(--red)' }};">{{ '+' if h.amount > 0 }}{{ h.amount }}</td>
+          <td>{{ h.balance_after }}</td>
+          <td>
+            {% if h.category != 'REVERSAL' %}
+            <form class="txn-cancel-form" method="post" action="/players/{{ player.id }}/points/{{ h.id }}/cancel"
+                  onsubmit="return confirm('عكس هذه العملية؟');">
+              <button class="btn btn-sm btn-outline" type="submit">↺ إلغاء</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted text-center">لا توجد عمليات بعد</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.qp-form').forEach(f => {
+  f.addEventListener('submit', () => {
+    const amt = parseInt(document.getElementById('pts-amount').value || '5', 10) || 5;
+    const sign = parseInt(f.querySelector('.qp-btn').dataset.sign, 10);
+    f.querySelector('.qp-amount-field').value = sign * amt;
+  });
+});
+</script>
 {% endblock %}

@@ -16,10 +16,7 @@
   <form method="post" action="/attendance/session/{{ ts.id }}/mark_all_present" onsubmit="return confirm('تحضير الجميع كحاضر؟ يمكنك تعديل الحالات الفردية بعدها.');">
     <button class="btn btn-outline" type="submit">✅ تحضير الجميع حاضر</button>
   </form>
-  <form method="post" action="/attendance/session/{{ ts.id }}/complete">
-    <input type="hidden" name="force" value="1">
-    <button class="btn btn-gold" type="submit">🏁 إنهاء الحصة</button>
-  </form>
+  <a class="btn btn-gold" href="/attendance/session/{{ ts.id }}/end">🏁 إنهاء الحصة — لحظة فوق</a>
 </div>
 
 <div class="attendance-grid section">

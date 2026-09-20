@@ -14,13 +14,30 @@
   {% endif %}
 
   <div class="hub-hero section">
-    <div class="avatar" style="width:64px;height:64px;font-size:22px;background:var(--gold);color:#241a02;">{{ selected.first_name[0] }}</div>
+    <div class="avatar" style="width:64px;height:64px;font-size:22px;background:var(--gold);color:#241a02;">
+      {% if selected.photo_url %}<img src="{{ selected.photo_url }}" alt="">{% else %}{{ selected.first_name[0] }}{% endif %}
+    </div>
     <div style="flex:1;">
       <span class="level-chip">{{ level.name if level else 'الانطلاقة' }}</span>
       <h1>{{ selected.first_name }} {{ selected.last_name }}</h1>
     </div>
     <div class="points-chip">⭐ {{ points }} رصيد فوق</div>
   </div>
+
+  {% if days_left is not none and days_left <= 7 %}
+  <div class="section">
+    <div class="attention-card" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h2 style="margin:0;">{% if days_left < 0 %}⛔ انتهى الاشتراك{% elif days_left == 0 %}⏰ ينتهي الاشتراك اليوم{% else %}⏳ الاشتراك ينتهي بعد {{ days_left }} يوم{% endif %}</h2>
+        <p class="muted" style="margin-top:4px;">{{ eligibility.detail }}</p>
+      </div>
+      <form method="post" action="/parent/request-renewal">
+        <input type="hidden" name="player_id" value="{{ selected.id }}">
+        <button class="btn btn-gold" type="submit">🔁 طلب تجديد الاشتراك الآن</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="section">
     <div class="points-banner">
@@ -44,10 +61,30 @@
         {% elif sub.status=='EXPIRED' %}<span class="badge badge-red">منتهٍ</span>{% endif %}
       {% else %}<span class="badge badge-gray">لا يوجد اشتراك</span>{% endif %}</div>
       {% if eligibility.code == 'COMPENSATION_ONLY' %}<div class="kpi-sub">{{ eligibility.detail }}</div>{% endif %}
+      {% if eligibility.code == 'NO_SESSIONS' %}<div class="kpi-sub" style="color:var(--red);">{{ eligibility.detail }}</div>{% endif %}
     </div>
     <div class="card"><div class="card-title">التطور العام</div>
       <div class="kpi-value">{{ overall or '-' }}</div>
       {% if overall %}<div class="kpi-sub">{{ child_label(overall) }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-2 section">
+    <div class="card">
+      <div class="card-title">آخر إنجاز</div>
+      {% if last_achievement %}
+        <div style="font-size:22px;">{{ last_achievement.icon }}</div>
+        <div class="kpi-sub">{{ last_achievement.name }}</div>
+      {% else %}<p class="muted" style="font-size:12.5px;">لم يحقق إنجازات بعد</p>{% endif %}
+    </div>
+    <div class="card">
+      <div class="card-title">أقرب مكافأة يقدر يحصل عليها</div>
+      {% if reward_next %}
+        <div class="nearest-reward">
+          <div class="reward-photo">{% if reward_next.photo_url %}<img src="{{ reward_next.photo_url }}" alt="">{% else %}🎁{% endif %}</div>
+          <div><b>{{ reward_next.name }}</b><div class="reward-shortfall">ينقصه <b>{{ reward_next.cost - points }}</b> نقطة</div></div>
+        </div>
+      {% else %}<p class="muted" style="font-size:12.5px;">🎉 رصيده يكفي لأي جائزة متوفرة!</p>{% endif %}
     </div>
   </div>
 
@@ -58,12 +95,13 @@
 
   <div class="section grid grid-2">
     <div class="card">
-      <div class="card-title">Parent Promise</div>
+      <div class="card-title">وعد أكاديمية فوق</div>
       <p style="font-size:13px;">أكاديمية فوق لا تعدك بصناعة لاعب محترف، بل بتدريب منظم، متابعة حقيقية، تقييم مستمر،
       بيئة تربوية آمنة، ورحلة تطور واضحة يمكنك رؤيتها هنا في أي وقت.</p>
     </div>
-    <div class="card">
+    <div class="card" style="display:flex; flex-direction:column; gap:8px;">
       <a class="btn btn-gold btn-block" href="/reports/player/{{ selected.id }}/pdf" target="_blank">📄 تحميل تقرير مفصّل PDF</a>
+      <a class="btn btn-outline btn-block" href="/me/journey?player_id={{ selected.id }}">🧭 رحلة {{ selected.first_name }} مع فوق</a>
     </div>
   </div>
 {% endif %}

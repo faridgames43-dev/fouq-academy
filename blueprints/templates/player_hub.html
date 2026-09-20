@@ -4,11 +4,13 @@
 {% block content %}
 
 <div class="hub-hero section">
-  <div class="avatar" style="width:72px;height:72px;font-size:26px;background:var(--gold);color:#241a02;">{{ player.first_name[0] }}</div>
+  <div class="avatar" style="width:72px;height:72px;font-size:26px;background:var(--gold);color:#241a02;">
+    {% if player.photo_url %}<img src="{{ player.photo_url }}" alt="">{% else %}{{ player.first_name[0] }}{% endif %}
+  </div>
   <div style="flex:1;">
     <span class="level-chip">{{ level.name if level else 'الانطلاقة' }} ↑</span>
     <h1>{{ player.first_name }} {{ player.last_name }}</h1>
-    <div class="muted" style="color:#cfd9ea;">رايحين فوق!</div>
+    <div class="muted" style="color:#cfd9ea;">رايحين فوق! · {{ player.player_code }}</div>
   </div>
   <div class="points-chip">⭐ {{ points }} رصيد فوق</div>
 </div>
@@ -30,11 +32,40 @@
     {% if overall %}<div class="kpi-sub">{{ child_label(overall) }}</div>{% endif %}
   </div>
   <div class="card"><div class="card-title">نسبة حضورك</div><div class="kpi-value">{{ attendance_pct }}٪</div></div>
-  <div class="card"><div class="card-title">حصصك</div><div class="kpi-value">{{ balances.TOTAL }}</div>
+  <div class="card"><div class="card-title">حصصك المتبقية</div><div class="kpi-value">{{ balances.TOTAL }}</div>
     <div class="kpi-sub">أساسية {{ balances.REGULAR }} · تعويضية {{ balances.COMPENSATION }}</div></div>
   <div class="card"><div class="card-title">آخر إنجاز</div>
     <div style="font-size:22px;">{{ last_achievement.icon if last_achievement else '🎯' }}</div>
     <div class="kpi-sub">{{ last_achievement.name if last_achievement else 'ابدأ رحلتك!' }}</div>
+  </div>
+</div>
+
+<div class="grid grid-2 section">
+  {% if current_challenge %}
+  <div class="challenge-card">
+    <div class="challenge-icon">{{ current_challenge.icon }}</div>
+    <div class="challenge-body">
+      <div class="challenge-title">التحدي الحالي: {{ current_challenge.title }}</div>
+      <div class="challenge-desc">{{ current_challenge.description }} — مكافأة {{ current_challenge.points_reward }} ⭐</div>
+      <div class="progress-bar"><span style="width: {{ (100 * challenge_progress_val / challenge_target) if challenge_target else 0 }}%;"></span></div>
+      <div class="challenge-progress-label">{{ challenge_progress_val }} / {{ challenge_target }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-title">أقرب مكافأة تقدر تحصل عليها</div>
+    {% if reward_next %}
+      <div class="nearest-reward">
+        <div class="reward-photo">{% if reward_next.photo_url %}<img src="{{ reward_next.photo_url }}" alt="">{% else %}🎁{% endif %}</div>
+        <div>
+          <b>{{ reward_next.name }}</b>
+          <div class="reward-shortfall">ينقصك <b>{{ reward_next.cost - points }}</b> نقطة فقط!</div>
+        </div>
+      </div>
+    {% else %}
+      <p class="muted" style="font-size:12.5px;">🎉 رصيدك يكفي لأي جائزة متوفرة حاليًا في متجر فوق!</p>
+    {% endif %}
   </div>
 </div>
 
@@ -49,7 +80,13 @@
             stroke-dasharray="{{ (readiness.readiness_pct/100*226)|round(1) }} 226" stroke-linecap="round"/></svg>
           <div class="ring-value">{{ readiness.readiness_pct }}٪</div>
         </div>
-        <div>جاهزيتك للوصول إلى <b>{{ readiness.next_level.name }}</b> ↑
+        <div>
+          <div>جاهزيتك للوصول إلى <b>{{ readiness.next_level.name }}</b> ↑</div>
+          {% if readiness.readiness_pct >= 85 %}
+            <div class="badge badge-green" style="margin-top:6px;">🔥 قريب جدًا من الترقية — استمر!</div>
+          {% elif readiness.readiness_pct >= 60 %}
+            <div class="badge badge-amber" style="margin-top:6px;">💪 في الطريق الصحيح للترقية</div>
+          {% endif %}
           {% if readiness.missing %}<ul style="font-size:12px; margin-top:4px;">{% for m in readiness.missing %}<li>{{ m }}</li>{% endfor %}</ul>
           {% else %}<div class="badge badge-green" style="margin-top:6px;">جاهز — بانتظار اعتماد المدرب ✓</div>{% endif %}
         </div>
@@ -59,7 +96,7 @@
 </div>
 
 <div class="section">
-  <div class="card-title">إنجازاتك</div>
+  <div class="section-header"><h2>🏅 إنجازاتك</h2><a class="btn btn-sm btn-outline" href="/me/journey">رحلتي مع فوق ↗</a></div>
   <div class="flex flex-wrap gap-8" style="margin-top:8px;">
     {% for a in achievements %}<span class="achievement-chip">{{ a.icon }} {{ a.name }}</span>
     {% else %}<span class="muted">لم تحقق إنجازات بعد — استمر في الحضور!</span>{% endfor %}

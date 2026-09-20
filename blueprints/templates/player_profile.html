@@ -19,6 +19,7 @@
     {% endif %}
   </div>
   <img src="/players/{{ player.id }}/barcode.png" alt="Barcode" style="background:#fff;padding:6px;border-radius:8px;">
+  <img src="/players/{{ player.id }}/qr.png" alt="QR" style="background:#fff;padding:6px;border-radius:8px;width:64px;height:64px;">
   <div class="points-chip">⭐ {{ pts_balance }} رصيد فوق</div>
 </div>
 
@@ -81,6 +82,22 @@
       {{ '❌ إلغاء الصلاحية الإدارية' if player.attendance_override else '🛂 منح صلاحية حضور إدارية' }}
     </button>
   </form>
+  {% if player.user_id %}
+  <form method="post" action="/players/{{ player.id }}/account/reset-password" style="display:inline;"
+        onsubmit="return confirm('إعادة تعيين كلمة مرور اللاعب؟ ستظهر كلمة مرور جديدة مرة واحدة فقط.');">
+    <button class="btn btn-outline" type="submit">🔑 إعادة تعيين كلمة مرور اللاعب</button>
+  </form>
+  <form method="post" action="/players/{{ player.id }}/account/toggle-active" style="display:inline;"
+        onsubmit="return confirm('تغيير حالة حساب اللاعب؟ بياناته وتاريخه يبقى محفوظًا بالكامل.');">
+    <button class="btn btn-outline" type="submit">⏸️ تعطيل/تفعيل حساب اللاعب</button>
+  </form>
+  {% endif %}
+  {% if parent and parent.user_id %}
+  <form method="post" action="/players/{{ player.id }}/account/reset-parent-password" style="display:inline;"
+        onsubmit="return confirm('إعادة تعيين كلمة مرور ولي الأمر؟ ستظهر كلمة مرور جديدة مرة واحدة فقط.');">
+    <button class="btn btn-outline" type="submit">🔑 إعادة تعيين كلمة مرور ولي الأمر</button>
+  </form>
+  {% endif %}
   {% endif %}
 </div>
 
@@ -207,10 +224,10 @@
   <div>
     <div class="section-header"><h2>سجل رصيد فوق</h2></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>التاريخ</th><th>الكمية</th><th>السبب</th><th>الرصيد بعدها</th><th></th></tr></thead>
+      <thead><tr><th>التاريخ</th><th>المسؤول</th><th>الكمية</th><th>السبب</th><th>الرصيد بعدها</th><th></th></tr></thead>
       <tbody>
       {% for t in pts_hist %}
-        <tr><td>{{ t.created_at }}</td><td style="color: {{ 'var(--green)' if t.amount > 0 else 'var(--red)' }};">{{ '+' if t.amount>0 else '' }}{{ t.amount }}</td><td>{{ t.reason }}</td><td>{{ t.balance_after }}</td>
+        <tr><td>{{ t.created_at }}</td><td>{{ t.coach_name or '-' }}</td><td style="color: {{ 'var(--green)' if t.amount > 0 else 'var(--red)' }};">{{ '+' if t.amount>0 else '' }}{{ t.amount }}</td><td>{{ t.reason }}{% if t.note %}<div class="muted" style="font-size:11px;">{{ t.note }}</div>{% endif %}</td><td>{{ t.balance_after }}</td>
           <td>
             {% if t.category != 'REVERSAL' and current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
             <form class="txn-cancel-form" method="post" action="/players/{{ player.id }}/points/{{ t.id }}/cancel"

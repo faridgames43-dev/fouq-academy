@@ -4,28 +4,6 @@
 {% block content %}
 
 <div class="section">
-  <div class="grid grid-4">
-    <div class="card"><div class="card-title">اللاعبون النشطون</div><div class="kpi-value">{{ kpis.active_players }}</div>
-      <div class="kpi-sub">جديد آخر 30 يوم: {{ kpis.new_players }}</div></div>
-    <div class="card"><div class="card-title">الحضور اليوم</div><div class="kpi-value">{{ kpis.attendance_today }}</div>
-      <div class="kpi-sub">الغياب اليوم: {{ kpis.absence_today }}</div></div>
-    <div class="card"><div class="card-title">اشتراكات تنتهي قريبًا</div><div class="kpi-value">{{ kpis.expiring_soon }}</div>
-      <div class="kpi-sub">منتهية: {{ kpis.expired }}</div></div>
-    <div class="card"><div class="card-title">حصص مستحقة قائمة</div><div class="kpi-value">{{ kpis.outstanding_compensation }}</div>
-      <div class="kpi-sub">التزامات تعويضية مفتوحة</div></div>
-
-    <div class="card"><div class="card-title">إيراد هذا الشهر</div><div class="kpi-value">{{ "%.0f"|format(kpis.revenue_month) }} ر.س</div>
-      <div class="kpi-sub">تجديدات 30 يوم: {{ kpis.renewals_30d }}</div></div>
-    <div class="card"><div class="card-title">معدل التجديد</div><div class="kpi-value">{{ kpis.renewal_rate }}٪</div>
-      <div class="kpi-sub">التسرب (Churn): {{ kpis.churn }}٪</div></div>
-    <div class="card"><div class="card-title">معدل الحضور العام</div><div class="kpi-value">{{ kpis.avg_attendance }}٪</div>
-      <div class="kpi-sub">متوسط تطور اللاعبين: {{ kpis.avg_development }}</div></div>
-    <div class="card"><div class="card-title">طلبات جوائز معلّقة</div><div class="kpi-value">{{ kpis.rewards_pending }}</div>
-      <div class="kpi-sub"><a href="/rewards">مراجعة الطلبات →</a></div></div>
-  </div>
-</div>
-
-<div class="section">
   <div class="attention-card">
     <h2>🚨 يحتاج تدخل اليوم</h2>
     {% if attention %}
@@ -61,6 +39,29 @@
       {% endfor %}
       </tbody>
     </table>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><h2>مؤشرات الأداء (KPIs)</h2></div>
+  <div class="grid grid-4">
+    <div class="card"><div class="card-title">اللاعبون النشطون</div><div class="kpi-value">{{ kpis.active_players }}</div>
+      <div class="kpi-sub">جديد آخر 30 يوم: {{ kpis.new_players }}</div></div>
+    <div class="card"><div class="card-title">الحضور اليوم</div><div class="kpi-value">{{ kpis.attendance_today }}</div>
+      <div class="kpi-sub">الغياب اليوم: {{ kpis.absence_today }}</div></div>
+    <div class="card"><div class="card-title">اشتراكات تنتهي قريبًا</div><div class="kpi-value">{{ kpis.expiring_soon }}</div>
+      <div class="kpi-sub">منتهية: {{ kpis.expired }}</div></div>
+    <div class="card"><div class="card-title">حصص مستحقة قائمة</div><div class="kpi-value">{{ kpis.outstanding_compensation }}</div>
+      <div class="kpi-sub">التزامات تعويضية مفتوحة</div></div>
+
+    <div class="card"><div class="card-title">إيراد هذا الشهر</div><div class="kpi-value">{{ "%.0f"|format(kpis.revenue_month) }} ر.س</div>
+      <div class="kpi-sub">تجديدات 30 يوم: {{ kpis.renewals_30d }}</div></div>
+    <div class="card"><div class="card-title">معدل التجديد</div><div class="kpi-value">{{ kpis.renewal_rate }}٪</div>
+      <div class="kpi-sub">التسرب (Churn): {{ kpis.churn }}٪</div></div>
+    <div class="card"><div class="card-title">معدل الحضور العام</div><div class="kpi-value">{{ kpis.avg_attendance }}٪</div>
+      <div class="kpi-sub">متوسط تطور اللاعبين: {{ kpis.avg_development }}</div></div>
+    <div class="card"><div class="card-title">طلبات جوائز معلّقة</div><div class="kpi-value">{{ kpis.rewards_pending }}</div>
+      <div class="kpi-sub"><a href="/rewards">مراجعة الطلبات →</a></div></div>
   </div>
 </div>
 

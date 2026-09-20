@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}رحلتي مع فوق{% endblock %}
+{% block page_title %}🧭 رحلة {{ player.first_name }} مع فوق{% endblock %}
+{% block content %}
+
+<div class="hub-hero section">
+  <div class="avatar" style="width:64px;height:64px;font-size:22px;background:var(--gold);color:#241a02;">
+    {% if player.photo_url %}<img src="{{ player.photo_url }}" alt="">{% else %}{{ player.first_name[0] }}{% endif %}
+  </div>
+  <div style="flex:1;">
+    <span class="level-chip">{{ level.name if level else 'الانطلاقة' }}</span>
+    <h1>{{ player.first_name }} {{ player.last_name }}</h1>
+    <div class="muted" style="color:#cfd9ea;">عضو منذ {{ player.join_date }}</div>
+  </div>
+  <button class="btn btn-gold" onclick="window.print()">🖨️ مشاركة / طباعة</button>
+</div>
+
+<div class="grid grid-4 section">
+  <div class="card"><div class="card-title">إجمالي الحصص</div><div class="kpi-value">{{ total_sessions }}</div></div>
+  <div class="card"><div class="card-title">ساعات التدريب (تقديري)</div><div class="kpi-value">{{ training_hours }}</div></div>
+  <div class="card"><div class="card-title">نسبة الحضور</div><div class="kpi-value">{{ attendance_pct }}٪</div></div>
+  <div class="card"><div class="card-title">إجمالي رصيد فوق المكتسب</div><div class="kpi-value">{{ points_earned }}</div>
+    <div class="kpi-sub">الرصيد الحالي: {{ points_balance }}</div></div>
+</div>
+
+<div class="section card">
+  <div class="card-title">مسار المستويات</div>
+  <div class="timeline">
+    {% for lv in level_history %}
+    <div class="timeline-item"><b>{{ lv.name }}</b> <span class="muted">— {{ lv.achieved_at[:10] }}</span></div>
+    {% else %}<p class="muted">لم تبدأ رحلة الترقيات بعد</p>{% endfor %}
+  </div>
+</div>
+
+<div class="section card">
+  <div class="card-title">تطور التقييم</div>
+  {% if dev_timeline %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>التاريخ</th><th>العام</th><th>المستوى</th></tr></thead>
+    <tbody>
+    {% for d in dev_timeline %}
+      <tr><td>{{ d.assessment.assessment_date }}</td><td>{{ d.overall or '-' }}</td>
+        <td>{{ child_label(d.overall) if d.overall else '-' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="muted">لا توجد تقييمات مسجلة بعد</p>{% endif %}
+</div>
+
+<div class="section">
+  <div class="card-title">🏅 الإنجازات ({{ achievements|length }})</div>
+  <div class="flex flex-wrap gap-8" style="margin-top:8px;">
+    {% for a in achievements %}<span class="achievement-chip">{{ a.icon }} {{ a.name }}</span>
+    {% else %}<span class="muted">لم يحقق إنجازات بعد</span>{% endfor %}
+  </div>
+</div>
+
+<div class="section card">
+  <div class="card-title">🎁 الجوائز المستبدلة ({{ redemptions|length }})</div>
+  {% if redemptions %}
+  <div class="flex flex-wrap gap-8" style="margin-top:8px;">
+    {% for r in redemptions %}<span class="badge badge-purple">{{ r.name }} — {{ r.requested_at[:10] }}</span>{% endfor %}
+  </div>
+  {% else %}<p class="muted">لا توجد جوائز مستبدلة بعد</p>{% endif %}
+</div>
+{% endblock %}

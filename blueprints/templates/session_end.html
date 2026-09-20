@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}لحظة فوق{% endblock %}
+{% block page_title %}🏁 لحظة فوق — {{ ts.group_name }}{% endblock %}
+{% block content %}
+<form method="post" id="end-form">
+<div class="card" style="max-width:620px; margin:0 auto;">
+  <p class="muted" style="font-size:12.5px;">أقل من دقيقة: اختر لاعب الحصة، منح/خصم نقاط سريع، وملاحظة مختصرة — ثم أغلق الحصة.</p>
+
+  <div class="field">
+    <label>⭐ لاعب الحصة (اختياري)</label>
+    <select name="player_of_session" id="pos-select">
+      <option value="">— بدون اختيار —</option>
+      {% for p in roster %}<option value="{{ p.id }}">{{ p.first_name }} {{ p.last_name }}</option>{% endfor %}
+    </select>
+    <div class="field-hint">يحصل تلقائيًا على 10 نقاط وشارة "لاعب الحصة".</div>
+  </div>
+
+  <div class="field">
+    <label>⚡ منح/خصم نقاط سريع لأحد اللاعبين (اختياري)</label>
+    <select name="points_player_id">
+      <option value="">— اختر لاعبًا —</option>
+      {% for p in roster %}<option value="{{ p.id }}">{{ p.first_name }} {{ p.last_name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="form-grid">
+    <div class="field"><label>عدد النقاط (سالب للخصم)</label><input type="number" name="amount" id="amount-field" value="0"></div>
+    <div class="field"><label>السبب</label>
+      <select name="reason" id="reason-select">
+        <option value="">— بدون —</option>
+        <optgroup label="➕ إضافة">
+          {% for reason, category in add_reasons %}<option value="{{ reason }}" data-sign="1">{{ reason }}</option>{% endfor %}
+        </optgroup>
+        <optgroup label="➖ خصم">
+          {% for reason, category in subtract_reasons %}<option value="{{ reason }}" data-sign="-1">{{ reason }}</option>{% endfor %}
+        </optgroup>
+      </select>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>🏅 إنجاز جديد (اختياري، لنفس اللاعب أعلاه)</label>
+    <select name="achievement">
+      <option value="">— بدون —</option>
+      <option value="TEAM_SPIRIT">روح رياضية</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>📝 ملاحظة مختصرة عن الحصة (اختياري)</label>
+    <textarea name="note" rows="2" placeholder="مثال: مجموعة متحمسة، ركزنا على التمرير اليوم…"></textarea>
+  </div>
+
+  <button class="btn btn-gold btn-block" type="submit" style="font-size:16px; padding:14px;">🏁 تأكيد وإغلاق الحصة</button>
+  <a class="btn btn-outline btn-block" style="margin-top:8px;" href="/attendance/session/{{ ts.id }}">رجوع بدون إغلاق</a>
+</div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('reason-select').addEventListener('change', function() {
+  const opt = this.selectedOptions[0];
+  const amountField = document.getElementById('amount-field');
+  const sign = opt && opt.dataset.sign ? parseInt(opt.dataset.sign, 10) : 0;
+  if (sign && (!amountField.value || amountField.value === '0')) {
+    amountField.value = sign * 5;
+  }
+});
+</script>
+{% endblock %}

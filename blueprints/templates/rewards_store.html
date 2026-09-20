@@ -1,21 +1,66 @@
 {% extends "base.html" %}
 {% block title %}متجر فوق{% endblock %}
-{% block page_title %}متجر فوق ⭐ {{ balance }}{% endblock %}
+{% block page_title %}متجر فوق{% endblock %}
 {% block content %}
-<div class="grid grid-4">
+
+<div class="section">
+  <div class="points-banner">
+    <div class="points-banner-icon">⭐</div>
+    <div class="points-banner-info">
+      <div class="points-banner-label">رصيدك الحالي من نقاط فوق</div>
+      <div class="points-banner-value">{{ balance }} <small>نقطة</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-4 section">
   {% for r in rewards %}
   <div class="reward-card">
     <div class="reward-photo">{% if r.photo_url %}<img src="{{ r.photo_url }}" alt="">{% else %}🎁{% endif %}</div>
     <b>{{ r.name }}</b>
     <p class="muted" style="font-size:12px;">{{ r.description }}</p>
     <div class="cost">{{ r.cost }} ⭐</div>
-    <div class="muted" style="font-size:11px;">المخزون: {{ r.stock }}</div>
+    <div class="progress-bar"><span style="width: {{ (100 * balance / r.cost) if r.cost else 100 }}%;"></span></div>
+    {% if balance < r.cost %}
+      <div class="reward-shortfall">ينقصك <b>{{ r.cost - balance }}</b> نقطة للحصول عليها</div>
+    {% else %}
+      <div class="reward-shortfall" style="color: var(--green); font-weight:700;">✅ تقدر تستبدلها الآن</div>
+    {% endif %}
+    <div class="muted" style="font-size:11px; margin-top:4px;">المخزون: {{ r.stock }}</div>
     <form method="post">
       <input type="hidden" name="reward_id" value="{{ r.id }}">
       <button class="btn btn-gold btn-sm btn-block" style="margin-top:8px;"
-        {% if balance < r.cost or r.stock <= 0 %}disabled{% endif %} type="submit">استبدال</button>
+        {% if balance < r.cost or r.stock <= 0 %}disabled{% endif %} type="submit">🎁 استبدال</button>
     </form>
   </div>
+  {% else %}
+  <div class="empty-state"><div class="emoji">🎁</div><p>لا توجد جوائز متاحة حاليًا</p></div>
   {% endfor %}
+</div>
+
+<div class="section card">
+  <div class="card-title">سجل استبدالاتك</div>
+  {% if redemptions %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>الجائزة</th><th>التاريخ</th><th>الحالة</th></tr></thead>
+    <tbody>
+    {% for r in redemptions %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td>{{ r.requested_at[:10] }}</td>
+        <td>
+          {% if r.status == 'PENDING' %}<span class="badge badge-amber">بانتظار الموافقة</span>
+          {% elif r.status == 'APPROVED' %}<span class="badge badge-blue">تمت الموافقة</span>
+          {% elif r.status == 'READY' %}<span class="badge badge-purple">جاهزة للاستلام</span>
+          {% elif r.status == 'COMPLETED' %}<span class="badge badge-green">تم التسليم ✓</span>
+          {% elif r.status == 'CANCELLED' %}<span class="badge badge-red">ملغاة</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">لم تستبدل أي جائزة بعد — جمّع رصيدك واستمتع بمتجر فوق!</p>
+  {% endif %}
 </div>
 {% endblock %}
