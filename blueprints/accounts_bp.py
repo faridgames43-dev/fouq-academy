@@ -100,8 +100,11 @@ def reset_data_backup():
     backup = reset_demo.build_backup(conn)
     conn.close()
     body = json.dumps(backup, ensure_ascii=False, default=str, indent=2)
-    return Response(body, mimetype="application/json",
-                     headers={"Content-Disposition": "attachment; filename=fouq-backup-before-reset.json"})
+    # Served inline as plain text (not a forced download) — Render's free-tier
+    # proxy was returning a spurious 503 to the browser for attachment
+    # downloads on this route even though the app served 200 successfully.
+    # Inline text can always be read/copy-saved reliably from the page itself.
+    return Response(body, mimetype="text/plain; charset=utf-8")
 
 
 @bp.route("/accounts/reset-data", methods=["POST"])
