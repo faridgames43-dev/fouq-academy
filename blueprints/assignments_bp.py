@@ -1,14 +1,16 @@
 import os
 import uuid
 from flask import Blueprint, render_template, request, redirect, g, flash, abort
-from db import get_conn, q, q1
+from db import get_conn, q, q1, DATA_DIR
 from business.rbac import login_required, permission_required, coach_group_ids, branch_scope, parent_player_ids
 from business import assignments as asg
 
 bp = Blueprint("assignments_bp", __name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "assignments")
+# Persistent disk (see players.py's UPLOAD_DIR comment) — not static/, which
+# is wiped on every redeploy/restart/spin-down.
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "assignments")
 
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mov", ".webm", ".m4v", ".pdf"}
 MAX_SIZE = 25 * 1024 * 1024  # 25MB — كافٍ لفيديو قصير من الجوال
@@ -35,7 +37,14 @@ def _save_submission_file(file_storage):
         file_type = "pdf"
     else:
         file_type = "image"
-    return f"/static/uploads/assignments/{fname}", file_type
+    return f"/uploads/assignments/{fname}", file_type
+
+
+@bp.route("/uploads/assignments/<path:filename>")
+@login_required
+def assignment_upload(filename):
+    from flask import send_from_directory
+    return send_from_directory(UPLOAD_DIR, filename)
 
 
 # ---------------------------------------------------------------- staff ----

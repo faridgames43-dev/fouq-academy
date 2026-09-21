@@ -2,7 +2,7 @@ import os
 import uuid
 from flask import Blueprint, render_template, request, redirect, g, flash, Response, abort, jsonify
 from datetime import date
-from db import get_conn, q, q1, ex
+from db import get_conn, q, q1, ex, DATA_DIR
 from business.rbac import login_required, permission_required, branch_scope, coach_group_ids, roles_required
 from business.subscriptions import get_attendance_eligibility, get_latest_subscription, sync_subscription_statuses
 from business.entitlements import get_balances, sync_expirations, grant_entitlement
@@ -19,7 +19,11 @@ from business.player_delete import delete_players
 bp = Blueprint("players", __name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "players")
+# Stored under DATA_DIR (the persistent disk on Render, /var/data) rather than
+# under static/ — the static/ folder lives in the app's code checkout, which
+# is wiped on every redeploy/restart/spin-down. Served back via the
+# /uploads/players/<file> route below instead of Flask's static handler.
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "players")
 
 
 def _save_player_photo(file_storage, player_code):
@@ -35,7 +39,7 @@ def _save_player_photo(file_storage, player_code):
         img = img.convert("RGB")
         img.thumbnail((500, 500))
         img.save(out_path, "JPEG", quality=85)
-        return f"/static/uploads/players/{fname}"
+        return f"/uploads/players/{fname}"
     except Exception:
         return None
 
@@ -51,6 +55,15 @@ def _scoped_player_query(base_sql, params, conn):
     if branch_id:
         return base_sql + " AND p.branch_id=?", params + [branch_id]
     return base_sql, params
+
+
+@bp.route("/uploads/players/<path:filename>")
+@login_required
+def player_upload(filename):
+    """Serves player photos from the persistent disk (see UPLOAD_DIR above) —
+    these live outside the static/ folder so they survive restarts/redeploys."""
+    from flask import send_from_directory
+    return send_from_directory(UPLOAD_DIR, filename)
 
 
 @bp.route("/players")

@@ -1,7 +1,7 @@
 import os
 import uuid
 from flask import Blueprint, render_template, request, redirect, g, flash, abort
-from db import get_conn, q, q1
+from db import get_conn, q, q1, DATA_DIR
 from business.rbac import permission_required, login_required, parent_player_ids
 from business.rewards import (
     list_rewards, get_reward, create_reward, update_reward,
@@ -12,7 +12,9 @@ from business.points import get_balance
 bp = Blueprint("rewards_bp", __name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "rewards")
+# Persistent disk (see players.py's UPLOAD_DIR comment) — not static/, which
+# is wiped on every redeploy/restart/spin-down.
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "rewards")
 
 
 def _save_reward_photo(file_storage):
@@ -27,9 +29,16 @@ def _save_reward_photo(file_storage):
         img = img.convert("RGB")
         img.thumbnail((600, 600))
         img.save(out_path, "JPEG", quality=85)
-        return f"/static/uploads/rewards/{fname}"
+        return f"/uploads/rewards/{fname}"
     except Exception:
         return None
+
+
+@bp.route("/uploads/rewards/<path:filename>")
+@login_required
+def reward_upload(filename):
+    from flask import send_from_directory
+    return send_from_directory(UPLOAD_DIR, filename)
 
 
 @bp.route("/rewards")
