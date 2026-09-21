@@ -14,6 +14,7 @@ from business.rewards import player_redemptions
 from business.barcode import render_code39, render_qr
 from business.audit import log as audit_log
 from business.accounts import create_user_account, find_parent_by_phone, reset_password, set_account_active, AccountError
+from business.player_delete import delete_players
 
 bp = Blueprint("players", __name__)
 
@@ -143,6 +144,24 @@ def bulk_move_group():
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "updated": updated, "group_name": group["name"]})
+
+
+@bp.route("/players/bulk/delete", methods=["POST"])
+@roles_required("SUPER_ADMIN", "PROJECT_MANAGER")
+def bulk_delete_players():
+    """🟥 حذف نهائي للاعبين محددين (أو كل اللاعبين المعروضين، حسب ما يرسله
+    الطرف الأمامي) — يحذف اللاعب وكل ما يخصه فقط (حضور/نقاط/إنجازات/
+    اشتراكات/حساب الدخول)، ولا يمس حساب ولي الأمر أو المدربين أو المجموعات.
+    عملية لا رجعة فيها، لذلك مقصورة على SUPER_ADMIN/PROJECT_MANAGER فقط."""
+    data = request.get_json(force=True)
+    player_ids = data.get("player_ids", [])
+    if not player_ids:
+        return jsonify({"ok": False, "message": "لم يتم تحديد أي لاعب"}), 400
+    conn = get_conn()
+    result = delete_players(conn, player_ids, g.user["id"])
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, **result})
 
 
 @bp.route("/players/new", methods=["GET", "POST"])
