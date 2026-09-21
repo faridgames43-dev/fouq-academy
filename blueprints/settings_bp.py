@@ -1,6 +1,6 @@
 import json
 from flask import Blueprint, render_template, request, redirect, g, flash
-from db import get_conn, q, ex
+from db import get_conn, q, q1, ex
 from business.rbac import permission_required
 from business.settings_lib import get_setting, get_setting_json, set_setting
 from business.audit import log as audit_log
@@ -43,6 +43,48 @@ def update_policies():
     return redirect("/settings")
 
 
+@bp.route("/settings/categories/new", methods=["POST"])
+@permission_required("manage_settings")
+def new_category():
+    conn = get_conn()
+    f = request.form
+    name = f.get("name", "").strip()
+    if not name:
+        conn.close()
+        flash("اسم الفئة مطلوب")
+        return redirect("/settings")
+    ex(conn, "INSERT INTO categories(name, min_age, max_age) VALUES (?,?,?)",
+       (name, f.get("min_age") or None, f.get("max_age") or None))
+    conn.commit(); conn.close()
+    flash("تم إضافة الفئة")
+    return redirect("/settings")
+
+
+@bp.route("/settings/categories/<int:category_id>/edit", methods=["POST"])
+@permission_required("manage_settings")
+def edit_category(category_id):
+    conn = get_conn()
+    category = q1(conn, "SELECT * FROM categories WHERE id=?", (category_id,))
+    if not category:
+        conn.close()
+        flash("الفئة غير موجودة")
+        return redirect("/settings")
+    f = request.form
+    name = f.get("name", "").strip()
+    if not name:
+        conn.close()
+        flash("اسم الفئة مطلوب")
+        return redirect("/settings")
+    active = 1 if f.get("active") == "on" else 0
+    ex(conn, "UPDATE categories SET name=?, min_age=?, max_age=?, active=? WHERE id=?",
+       (name, f.get("min_age") or None, f.get("max_age") or None, active, category_id))
+    audit_log(conn, g.user["id"], "UPDATE_CATEGORY", "categories", category_id,
+              before={"name": category["name"]}, after={"name": name, "active": active})
+    conn.commit(); conn.close()
+    flash("تم تحديث الفئة")
+    return redirect("/settings")
+
+
 @bp.route("/settings/packages/new", methods=["POST"])
 @permission_required("manage_packages")
 def new_package():
@@ -58,6 +100,40 @@ def new_package():
     return redirect("/settings")
 
 
+@bp.route("/settings/packages/<int:package_id>/edit", methods=["POST"])
+@permission_required("manage_packages")
+def edit_package(package_id):
+    conn = get_conn()
+    package = q1(conn, "SELECT * FROM packages WHERE id=?", (package_id,))
+    if not package:
+        conn.close()
+        flash("الباقة غير موجودة")
+        return redirect("/settings")
+    f = request.form
+    try:
+        price = float(f.get("price"))
+        duration_days = int(f.get("duration_days"))
+        sessions_count = int(f.get("sessions_count"))
+        days_per_week = int(f.get("days_per_week", 3))
+        freeze_policy_days = int(f.get("freeze_policy_days", 7))
+        compensation_expiry_days = int(f.get("compensation_expiry_days", 30))
+    except (TypeError, ValueError):
+        conn.close()
+        flash("تأكد أن الأرقام (السعر، المدة، عدد الحصص...) صحيحة")
+        return redirect("/settings")
+    active = 1 if f.get("active") == "on" else 0
+    ex(conn, """UPDATE packages SET name=?, branch_id=?, category_id=?, price=?, duration_days=?,
+               sessions_count=?, days_per_week=?, freeze_policy_days=?, compensation_expiry_days=?, active=?
+               WHERE id=?""",
+       (f.get("name"), f.get("branch_id") or None, f.get("category_id") or None, price, duration_days,
+        sessions_count, days_per_week, freeze_policy_days, compensation_expiry_days, active, package_id))
+    audit_log(conn, g.user["id"], "UPDATE_PACKAGE", "packages", package_id,
+              before={"name": package["name"]}, after={"name": f.get("name"), "active": active})
+    conn.commit(); conn.close()
+    flash("تم تحديث الباقة")
+    return redirect("/settings")
+
+
 @bp.route("/settings/groups/new", methods=["POST"])
 @permission_required("manage_players")
 def new_group():
@@ -67,6 +143,26 @@ def new_group():
        (f.get("name"), f.get("branch_id"), f.get("category_id"), f.get("coach_id") or None))
     conn.commit(); conn.close()
     flash("تم إنشاء المجموعة")
+    return redirect("/settings")
+
+
+@bp.route("/settings/groups/<int:group_id>/edit", methods=["POST"])
+@permission_required("manage_players")
+def edit_group(group_id):
+    conn = get_conn()
+    group = q1(conn, "SELECT * FROM groups_ WHERE id=?", (group_id,))
+    if not group:
+        conn.close()
+        flash("المجموعة غير موجودة")
+        return redirect("/settings")
+    f = request.form
+    active = 1 if f.get("active") == "on" else 0
+    ex(conn, "UPDATE groups_ SET name=?, branch_id=?, category_id=?, coach_id=?, active=? WHERE id=?",
+       (f.get("name"), f.get("branch_id"), f.get("category_id"), f.get("coach_id") or None, active, group_id))
+    audit_log(conn, g.user["id"], "UPDATE_GROUP", "groups_", group_id,
+              before={"name": group["name"]}, after={"name": f.get("name"), "active": active})
+    conn.commit(); conn.close()
+    flash("تم تحديث المجموعة")
     return redirect("/settings")
 
 
@@ -86,6 +182,38 @@ def new_coach():
     return redirect("/settings")
 
 
+@bp.route("/settings/coaches/<int:coach_id>/edit", methods=["POST"])
+@permission_required("manage_coaches")
+def edit_coach(coach_id):
+    conn = get_conn()
+    coach = q1(conn, "SELECT * FROM coaches WHERE id=?", (coach_id,))
+    if not coach:
+        conn.close()
+        flash("المدرب غير موجود")
+        return redirect("/settings")
+    f = request.form
+    name = f.get("name", "").strip()
+    phone = f.get("phone", "").strip()
+    if not name or not phone:
+        conn.close()
+        flash("اسم المدرب وجواله مطلوبان")
+        return redirect("/settings")
+    branch_id = f.get("branch_id") or None
+    active = 1 if f.get("active") == "on" else 0
+    ex(conn, "UPDATE coaches SET name=?, phone=?, branch_id=?, active=? WHERE id=?",
+       (name, phone, branch_id, active, coach_id))
+    # المدرب له حساب دخول مرتبط في users — نحدّث نفس البيانات هناك حتى يبقى
+    # اسمه وجواله وفرعه وحالة تفعيله متطابقة بين الجدولين.
+    if coach["user_id"]:
+        ex(conn, "UPDATE users SET name=?, phone=?, branch_id=?, active=? WHERE id=?",
+           (name, phone, branch_id, active, coach["user_id"]))
+    audit_log(conn, g.user["id"], "UPDATE_COACH", "coaches", coach_id,
+              before={"name": coach["name"]}, after={"name": name, "active": active})
+    conn.commit(); conn.close()
+    flash("تم تحديث بيانات المدرب")
+    return redirect("/settings")
+
+
 @bp.route("/settings/branches/new", methods=["POST"])
 @permission_required("manage_branches")
 def new_branch():
@@ -94,4 +222,29 @@ def new_branch():
     ex(conn, "INSERT INTO branches(name, city, address) VALUES (?,?,?)", (f.get("name"), f.get("city"), f.get("address")))
     conn.commit(); conn.close()
     flash("تم إضافة الفرع")
+    return redirect("/settings")
+
+
+@bp.route("/settings/branches/<int:branch_id>/edit", methods=["POST"])
+@permission_required("manage_branches")
+def edit_branch(branch_id):
+    conn = get_conn()
+    branch = q1(conn, "SELECT * FROM branches WHERE id=?", (branch_id,))
+    if not branch:
+        conn.close()
+        flash("الفرع غير موجود")
+        return redirect("/settings")
+    f = request.form
+    name = f.get("name", "").strip()
+    if not name:
+        conn.close()
+        flash("اسم الفرع مطلوب")
+        return redirect("/settings")
+    active = 1 if f.get("active") == "on" else 0
+    ex(conn, "UPDATE branches SET name=?, city=?, address=?, active=? WHERE id=?",
+       (name, f.get("city"), f.get("address"), active, branch_id))
+    audit_log(conn, g.user["id"], "UPDATE_BRANCH", "branches", branch_id,
+              before={"name": branch["name"]}, after={"name": name, "active": active})
+    conn.commit(); conn.close()
+    flash("تم تحديث الفرع")
     return redirect("/settings")
