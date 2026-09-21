@@ -320,6 +320,73 @@ def build_monthly_report_pdf(data):
     return buf
 
 
+def build_credentials_pdf(created_players, unified_password):
+    """One handout PDF, grouped by category, listing each newly-imported
+    player's name / login username (their player code) / initial shared
+    password — meant to be printed/split and handed to parents. created_players
+    is the list returned by business.bulk_import.import_players()."""
+    grouped = {}
+    for p in created_players:
+        grouped.setdefault(p["category_name"], []).append(p)
+    for cat in grouped:
+        grouped[cat].sort(key=lambda p: (p["first_name"], p["last_name"]))
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    regular, bold = ensure_fonts()
+    y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور",
+                          "أكاديمية فوق — يرجى تسليم كل عائلة سطرها الخاص فقط")
+
+    c.setFillColor(TEXT_DIM)
+    c.setFont(regular, 9.5)
+    note = (f"رابط الدخول: fouq-academy.onrender.com — كلمة المرور المبدئية لكل اللاعبين أدناه: "
+            f"{unified_password} (سيُطلب من اللاعب تغييرها بنفسه عند أول تسجيل دخول)")
+    c.drawRightString(width - 40, y, ar(note))
+    y -= 26
+
+    for cat_name, players in grouped.items():
+        est_h = 32 + 22 * (len(players) + 1)
+        if y - min(est_h, 140) < 60:
+            _draw_footer(c, width)
+            c.showPage()
+            y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", "تابع")
+
+        y = _section_title(c, y, width, f"الفئة: {cat_name} ({len(players)} لاعب)")
+        header = ["اسم اللاعب", "اسم المستخدم (كود اللاعب)", "كلمة المرور"][::-1]
+        table_data = [[ar(h) for h in header]]
+        for p in players:
+            row = [f"{p['first_name']} {p['last_name']}", p["code"], unified_password][::-1]
+            table_data.append([ar(v) for v in row])
+        col_w = (width - 80) / 3
+        t = Table(table_data, colWidths=[col_w] * 3, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("FONT", (0, 0), (-1, -1), regular, 9.5),
+            ("FONT", (0, 0), (-1, 0), bold, 10),
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fafbfe")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        tw, th = t.wrapOn(c, width - 80, height)
+        if th > y - 60:
+            _draw_footer(c, width)
+            c.showPage()
+            y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", "تابع")
+            tw, th = t.wrapOn(c, width - 80, height)
+        t.drawOn(c, 40, y - th)
+        y = y - th - 24
+
+    _draw_footer(c, width)
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 def build_player_report_pdf(ctx):
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
