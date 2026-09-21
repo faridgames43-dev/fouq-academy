@@ -17,6 +17,8 @@ def create_app():
                 from seed import main as seed_main; seed_main()
     migrate_db()
 
+    FORCED_RESET_ALLOWED_ENDPOINTS = {"auth.change_password", "auth.logout", "static"}
+
     @app.before_request
     def load_user():
         g.user = None
@@ -25,6 +27,8 @@ def create_app():
             conn = get_conn()
             g.user = q1(conn, "SELECT * FROM users WHERE id=?", (uid,))
             conn.close()
+        if g.user and g.user.get("must_reset_password") and request.endpoint not in FORCED_RESET_ALLOWED_ENDPOINTS:
+            return redirect(url_for("auth.change_password"))
 
     @app.context_processor
     def inject_globals():
