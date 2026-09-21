@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}استيراد لاعبين من إكسل{% endblock %}
+{% block page_title %}استيراد لاعبين من إكسل{% endblock %}
+{% block content %}
+<div class="card section" style="max-width:640px;">
+  <div class="card-title">1️⃣ حمّل نموذج الإكسل وعبّئه</div>
+  <p class="muted" style="font-size:13.5px;margin-bottom:12px;">
+    النموذج فيه صفحة تعليمات، وقائمة بالفئات والفروع والمجموعات الحالية بالضبط حتى تكتبها بنفس الإملاء (أو تختارها من القوائم المنسدلة).
+  </p>
+  <a class="btn btn-outline" href="/accounts/import/template.xlsx">⬇️ تحميل نموذج الإكسل</a>
+</div>
+
+<div class="card section" style="max-width:640px;">
+  <div class="card-title">2️⃣ ارفع الملف بعد التعبئة</div>
+  <form method="post" action="/accounts/import" enctype="multipart/form-data">
+    <div class="field">
+      <label>ملف الإكسل المعبّأ (.xlsx)</label>
+      <input type="file" name="file" accept=".xlsx" required>
+    </div>
+    <div class="field">
+      <label>كلمة مرور موحدة لكل اللاعبين المستوردين (6 أحرف على الأقل)</label>
+      <input type="text" name="unified_password" value="{{ suggested_password }}" minlength="6" required>
+      <div class="muted" style="font-size:12px;margin-top:4px;">
+        هذه كلمة المرور اللي راح تظهر لكل لاعب في ملف PDF بعد الاستيراد مباشرة — كل لاعب يستخدمها لأول دخول فقط، وبعدها النظام يطلب منه تغييرها بنفسه.
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">📥 استيراد وإنشاء الحسابات</button>
+  </form>
+  <p class="muted" style="font-size:12.5px;margin-top:10px;">
+    إذا كان في أي صف فيه خطأ (فئة أو فرع غير موجود، تاريخ ميلاد غير صالح...) لن يتم إنشاء أي حساب إطلاقًا — بتوصلك رسائل تحدد كل خطأ بالضبط حتى تصححه وتعيد الرفع.
+  </p>
+  <p class="muted" style="font-size:12.5px;">
+    بعد نجاح الاستيراد، بيتحمّل تلقائيًا ملف PDF مرتب بحسب الفئات فيه اسم كل لاعب واسم المستخدم (كود اللاعب) وكلمة المرور — جاهز لإرساله لأولياء الأمور.
+  </p>
+</div>
+{% endblock %}
