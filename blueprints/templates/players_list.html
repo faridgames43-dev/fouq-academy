@@ -39,6 +39,13 @@
     </select>
     <button type="button" class="btn btn-sm btn-primary" id="bulk-move-btn">نقل</button>
   </div>
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER'] %}
+  <div class="flex gap-8 flex-wrap items-center" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border,#eee);">
+    <span class="muted" style="font-size:12.5px;">⚠️ حذف نهائي (لا يمكن التراجع عنه):</span>
+    <button type="button" class="btn btn-sm btn-danger" id="bulk-delete-selected">🗑️ حذف المحددين</button>
+    <button type="button" class="btn btn-sm btn-danger" id="bulk-delete-all">🗑️ حذف كل اللاعبين المعروضين ({{ players|length }})</button>
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -131,6 +138,34 @@ const bulkActivateBtn = document.getElementById("bulk-activate");
 if (bulkActivateBtn) bulkActivateBtn.addEventListener("click", () => bulkSetActive(true));
 const bulkDeactivateBtn = document.getElementById("bulk-deactivate");
 if (bulkDeactivateBtn) bulkDeactivateBtn.addEventListener("click", () => bulkSetActive(false));
+
+async function bulkDeletePlayers(ids, confirmLabel) {
+  if (!ids.length) { alert("لا يوجد لاعبون لحذفهم."); return; }
+  if (!confirm(`تحذير: سيتم حذف ${confirmLabel} نهائيًا (${ids.length} لاعب) — بياناتهم وحضورهم ونقاطهم وحساب الدخول الخاص بهم سيُحذف بالكامل ولا يمكن التراجع عن هذا. هل أنت متأكد؟`)) return;
+  if (!confirm(`تأكيد أخير: هذا حذف نهائي لا رجعة فيه لـ ${ids.length} لاعب. متابعة؟`)) return;
+  const res = await postJSON("/players/bulk/delete", { player_ids: ids });
+  if (res.ok) {
+    alert(`تم حذف ${res.deleted} لاعب نهائيًا${res.skipped ? ` (تم تجاوز ${res.skipped} غير موجود)` : ""}`);
+    location.reload();
+  } else {
+    alert(res.message || "تعذّر تنفيذ الحذف");
+  }
+}
+
+const bulkDeleteSelectedBtn = document.getElementById("bulk-delete-selected");
+if (bulkDeleteSelectedBtn) {
+  bulkDeleteSelectedBtn.addEventListener("click", () => {
+    bulkDeletePlayers(selectedPlayerRowIds(), "اللاعبين المحددين");
+  });
+}
+
+const bulkDeleteAllBtn = document.getElementById("bulk-delete-all");
+if (bulkDeleteAllBtn) {
+  bulkDeleteAllBtn.addEventListener("click", () => {
+    const allIds = Array.from(document.querySelectorAll(".select-player-row")).map(cb => cb.dataset.player);
+    bulkDeletePlayers(allIds, "كل اللاعبين المعروضين في هذه القائمة");
+  });
+}
 
 const bulkMoveBtn = document.getElementById("bulk-move-btn");
 if (bulkMoveBtn) {
