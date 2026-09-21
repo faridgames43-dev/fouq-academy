@@ -3,7 +3,11 @@ import os
 from contextlib import contextmanager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "data", "academy.db")
+# On Render, DATA_DIR points at the mounted persistent disk (/var/data) so the
+# SQLite file survives restarts/redeploys/spin-downs. Locally (no DATA_DIR set)
+# it falls back to a "data" folder next to the app, same as before.
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+DB_PATH = os.path.join(DATA_DIR, "academy.db")
 
 
 def dict_factory(cursor, row):
@@ -35,7 +39,7 @@ def tx():
 
 
 def init_db():
-    os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
     conn = get_conn()
     with open(os.path.join(BASE_DIR, "schema.sql"), "r", encoding="utf-8") as f:
         conn.executescript(f.read())

@@ -1,6 +1,6 @@
 import os
 from flask import Flask, session, redirect, url_for, g, request, render_template
-from db import get_conn, q1, init_db, migrate_db
+from db import get_conn, q1, init_db, migrate_db, DB_PATH
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,7 +13,7 @@ def create_app():
     app.config["JSON_AS_ASCII"] = False
     app.config["MAX_CONTENT_LENGTH"] = 30 * 1024 * 1024  # 30MB safety cap (assignment video uploads, etc.)
 
-    if not os.path.exists(os.path.join(BASE_DIR, "data", "academy.db")):
+    if not os.path.exists(DB_PATH):
                 from seed import main as seed_main; seed_main()
     migrate_db()
 
