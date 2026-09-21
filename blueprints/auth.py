@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, g
 from werkzeug.security import check_password_hash
 from db import get_conn, q1
+from business.accounts import change_own_password, AccountError
 
 bp = Blueprint("auth", __name__)
 
@@ -36,6 +37,31 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/change-password", methods=["GET", "POST"])
+def change_password():
+    if not session.get("user_id"):
+        return redirect(url_for("auth.login"))
+    if request.method == "POST":
+        conn = get_conn()
+        try:
+            if request.form.get("new_password", "") != request.form.get("confirm_password", ""):
+                raise AccountError("كلمتا المرور الجديدتان غير متطابقتين")
+            change_own_password(
+                conn, session["user_id"],
+                request.form.get("current_password", ""),
+                request.form.get("new_password", ""),
+            )
+            conn.commit()
+            conn.close()
+            flash("تم تغيير كلمة المرور بنجاح")
+            return redirect(ROLE_HOME.get(session.get("role"), "/dashboard"))
+        except AccountError as e:
+            conn.close()
+            flash(str(e))
+    forced = bool(g.get("user") and g.user.get("must_reset_password"))
+    return render_template("change_password.html", forced=forced)
 
 
 @bp.route("/")

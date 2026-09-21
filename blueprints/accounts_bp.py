@@ -2,14 +2,17 @@
 (لاعب / مدرب / ولي أمر / إداري) instead of them being scattered across
 /players/new and /settings. Also hosts the one-time "بدء من جديد" reset
 action that clears demo/test players+coaches+parents before real onboarding."""
-from flask import Blueprint, render_template, request, redirect, g, flash, Response
+from flask import Blueprint, render_template, request, redirect, g, flash, Response, send_file
 from werkzeug.security import generate_password_hash
 from db import get_conn, q, q1, ex
 from business.rbac import login_required, permission_required, roles_required, ADMIN_ROLES
-from business.accounts import create_user_account, find_parent_by_phone, AccountError
+from business.accounts import create_user_account, find_parent_by_phone, AccountError, generate_password
 from business.audit import log as audit_log
 from business import reset_demo
+from business import bulk_import
+from business.pdf_export import build_credentials_pdf
 import json
+import io
 
 bp = Blueprint("accounts_bp", __name__)
 
@@ -82,6 +85,58 @@ def new_staff():
     flash(f"تم إنشاء حساب {STAFF_ROLE_LABELS[role]}: {name}")
     flash(f"🔑 بيانات الدخول — {email or phone} / كلمة المرور: {password} (تُعرض مرة واحدة فقط)")
     return redirect("/accounts")
+
+
+@bp.route("/accounts/import", methods=["GET"])
+@permission_required("manage_players")
+def import_players_form():
+    suggested_password = generate_password()
+    return render_template("accounts_import.html", suggested_password=suggested_password)
+
+
+@bp.route("/accounts/import/template.xlsx", methods=["GET"])
+@permission_required("manage_players")
+def import_template():
+    conn = get_conn()
+    wb = bulk_import.build_template_workbook(conn)
+    conn.close()
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name="نموذج_استيراد_اللاعبين.xlsx",
+                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@bp.route("/accounts/import", methods=["POST"])
+@permission_required("manage_players")
+def import_players_execute():
+    file = request.files.get("file")
+    unified_password = request.form.get("unified_password", "").strip()
+    if not file or not file.filename:
+        flash("اختر ملف الإكسل أولًا")
+        return redirect("/accounts/import")
+    if len(unified_password) < 6:
+        flash("كلمة المرور الموحدة يجب أن تكون 6 أحرف على الأقل")
+        return redirect("/accounts/import")
+
+    conn = get_conn()
+    rows, errors = bulk_import.parse_workbook(conn, file.stream)
+    if errors:
+        conn.close()
+        for e in errors[:25]:
+            flash(f"⚠️ {e}")
+        if len(errors) > 25:
+            flash(f"...و{len(errors) - 25} خطأ إضافي. صحّح الملف وأعد رفعه — لم يتم إنشاء أي حساب.")
+        else:
+            flash("صحّح الأخطاء أعلاه وأعد رفع الملف — لم يتم إنشاء أي حساب.")
+        return redirect("/accounts/import")
+
+    created = bulk_import.import_players(conn, rows, unified_password, g.user["id"])
+    conn.commit()
+    conn.close()
+
+    pdf_buf = build_credentials_pdf(created, unified_password)
+    return send_file(pdf_buf, as_attachment=True, download_name="بيانات_دخول_اللاعبين.pdf", mimetype="application/pdf")
 
 
 @bp.route("/accounts/reset-data", methods=["GET"])
