@@ -20,19 +20,72 @@
   </div>
 </div>
 
+<p class="muted section" style="font-size:12.5px;margin-bottom:-6px;">💡 اضغط على أي عنصر بالأسفل لفتح نموذج تعديله.</p>
+
 <div class="section grid grid-2">
   <div class="card">
     <div class="card-title">الفروع</div>
-    <ul>{% for b in branches %}<li>{{ b.name }} — {{ b.city }} {% if not b.active %}(قيد التخطيط){% endif %}</li>{% endfor %}</ul>
-    <form method="post" action="/settings/branches/new" class="flex gap-8" style="margin-top:8px;">
+    {% for b in branches %}
+    <details style="margin-top:6px;padding-bottom:6px;border-bottom:1px solid #eee;">
+      <summary style="cursor:pointer;">{{ b.name }} — {{ b.city or '-' }}{% if not b.active %} <span class="muted">(معطّل)</span>{% endif %} <span class="muted" style="font-size:11px;">✏️ تعديل</span></summary>
+      <form method="post" action="/settings/branches/{{ b.id }}/edit" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+        <input name="name" value="{{ b.name }}" placeholder="اسم الفرع" required>
+        <input name="city" value="{{ b.city or '' }}" placeholder="المدينة">
+        <input name="address" value="{{ b.address or '' }}" placeholder="العنوان">
+        <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" name="active" {% if b.active %}checked{% endif %}> مفعّل</label>
+        <button class="btn btn-sm btn-gold" type="submit">حفظ</button>
+      </form>
+    </details>
+    {% else %}<p class="muted" style="font-size:12.5px;">لا يوجد فروع بعد</p>{% endfor %}
+    <form method="post" action="/settings/branches/new" class="flex gap-8" style="margin-top:12px;">
       <input name="name" placeholder="اسم الفرع" required><input name="city" placeholder="المدينة">
       <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
     </form>
   </div>
+
+  <div class="card">
+    <div class="card-title">الفئات</div>
+    {% for c in categories %}
+    <details style="margin-top:6px;padding-bottom:6px;border-bottom:1px solid #eee;">
+      <summary style="cursor:pointer;">{{ c.name }}{% if c.min_age or c.max_age %} — {{ c.min_age or '؟' }} إلى {{ c.max_age or '؟' }} سنة{% endif %}{% if not c.active %} <span class="muted">(معطّلة)</span>{% endif %} <span class="muted" style="font-size:11px;">✏️ تعديل</span></summary>
+      <form method="post" action="/settings/categories/{{ c.id }}/edit" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+        <input name="name" value="{{ c.name }}" placeholder="اسم الفئة" required>
+        <input name="min_age" type="number" value="{{ c.min_age or '' }}" placeholder="من (سنة)" style="width:90px;">
+        <input name="max_age" type="number" value="{{ c.max_age or '' }}" placeholder="إلى (سنة)" style="width:90px;">
+        <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" name="active" {% if c.active %}checked{% endif %}> مفعّلة</label>
+        <button class="btn btn-sm btn-gold" type="submit">حفظ</button>
+      </form>
+    </details>
+    {% else %}<p class="muted" style="font-size:12.5px;">لا يوجد فئات بعد</p>{% endfor %}
+    <form method="post" action="/settings/categories/new" class="flex gap-8 flex-wrap" style="margin-top:12px;">
+      <input name="name" placeholder="اسم الفئة" required>
+      <input name="min_age" type="number" placeholder="من (سنة)" style="width:90px;">
+      <input name="max_age" type="number" placeholder="إلى (سنة)" style="width:90px;">
+      <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
+    </form>
+  </div>
+
   <div class="card">
     <div class="card-title">الباقات</div>
-    <ul>{% for p in packages %}<li>{{ p.name }} — {{ p.price }} ر.س / {{ p.sessions_count }} حصة</li>{% endfor %}</ul>
-    <form method="post" action="/settings/packages/new" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+    {% for p in packages %}
+    <details style="margin-top:6px;padding-bottom:6px;border-bottom:1px solid #eee;">
+      <summary style="cursor:pointer;">{{ p.name }} — {{ p.price }} ر.س / {{ p.sessions_count }} حصة{% if not p.active %} <span class="muted">(معطّلة)</span>{% endif %} <span class="muted" style="font-size:11px;">✏️ تعديل</span></summary>
+      <form method="post" action="/settings/packages/{{ p.id }}/edit" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+        <input name="name" value="{{ p.name }}" placeholder="اسم الباقة" required>
+        <input name="price" type="number" step="0.01" value="{{ p.price }}" placeholder="السعر" required style="width:90px;">
+        <input name="sessions_count" type="number" value="{{ p.sessions_count }}" placeholder="عدد الحصص" required style="width:100px;">
+        <input name="duration_days" type="number" value="{{ p.duration_days }}" placeholder="المدة (يوم)" required style="width:110px;">
+        <input name="days_per_week" type="number" value="{{ p.days_per_week }}" placeholder="أيام/أسبوع" style="width:100px;">
+        <input name="freeze_policy_days" type="number" value="{{ p.freeze_policy_days }}" placeholder="مهلة التجميد" style="width:110px;">
+        <input name="compensation_expiry_days" type="number" value="{{ p.compensation_expiry_days }}" placeholder="صلاحية التعويض" style="width:120px;">
+        <select name="branch_id"><option value="">كل الفروع</option>{% for b in branches %}<option value="{{ b.id }}" {% if p.branch_id==b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select>
+        <select name="category_id"><option value="">كل الفئات</option>{% for c in categories %}<option value="{{ c.id }}" {% if p.category_id==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+        <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" name="active" {% if p.active %}checked{% endif %}> مفعّلة</label>
+        <button class="btn btn-sm btn-gold" type="submit">حفظ</button>
+      </form>
+    </details>
+    {% else %}<p class="muted" style="font-size:12.5px;">لا يوجد باقات بعد</p>{% endfor %}
+    <form method="post" action="/settings/packages/new" class="flex gap-8 flex-wrap" style="margin-top:12px;">
       <input name="name" placeholder="اسم الباقة" required>
       <input name="price" type="number" placeholder="السعر" required style="width:90px;">
       <input name="sessions_count" type="number" placeholder="عدد الحصص" required style="width:100px;">
@@ -41,10 +94,23 @@
       <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
     </form>
   </div>
+
   <div class="card">
     <div class="card-title">المجموعات</div>
-    <ul>{% for g in groups %}<li>{{ g.name }} — {{ g.category_name }} — المدرب: {{ g.coach_name or '-' }}</li>{% endfor %}</ul>
-    <form method="post" action="/settings/groups/new" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+    {% for g in groups %}
+    <details style="margin-top:6px;padding-bottom:6px;border-bottom:1px solid #eee;">
+      <summary style="cursor:pointer;">{{ g.name }} — {{ g.category_name }} — المدرب: {{ g.coach_name or '-' }}{% if not g.active %} <span class="muted">(معطّلة)</span>{% endif %} <span class="muted" style="font-size:11px;">✏️ تعديل</span></summary>
+      <form method="post" action="/settings/groups/{{ g.id }}/edit" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+        <input name="name" value="{{ g.name }}" placeholder="اسم المجموعة" required>
+        <select name="branch_id">{% for b in branches %}<option value="{{ b.id }}" {% if g.branch_id==b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select>
+        <select name="category_id">{% for c in categories %}<option value="{{ c.id }}" {% if g.category_id==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+        <select name="coach_id"><option value="">بدون مدرب</option>{% for c in coaches %}<option value="{{ c.id }}" {% if g.coach_id==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+        <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" name="active" {% if g.active %}checked{% endif %}> مفعّلة</label>
+        <button class="btn btn-sm btn-gold" type="submit">حفظ</button>
+      </form>
+    </details>
+    {% else %}<p class="muted" style="font-size:12.5px;">لا يوجد مجموعات بعد</p>{% endfor %}
+    <form method="post" action="/settings/groups/new" class="flex gap-8 flex-wrap" style="margin-top:12px;">
       <input name="name" placeholder="اسم المجموعة" required>
       <select name="branch_id">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
       <select name="category_id">{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
@@ -52,10 +118,22 @@
       <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
     </form>
   </div>
+
   <div class="card">
     <div class="card-title">المدربون</div>
-    <ul>{% for c in coaches %}<li>{{ c.name }} — {{ c.phone }}</li>{% endfor %}</ul>
-    <form method="post" action="/settings/coaches/new" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+    {% for c in coaches %}
+    <details style="margin-top:6px;padding-bottom:6px;border-bottom:1px solid #eee;">
+      <summary style="cursor:pointer;">{{ c.name }} — {{ c.phone }}{% if not c.active %} <span class="muted">(معطّل)</span>{% endif %} <span class="muted" style="font-size:11px;">✏️ تعديل</span></summary>
+      <form method="post" action="/settings/coaches/{{ c.id }}/edit" class="flex gap-8 flex-wrap" style="margin-top:8px;">
+        <input name="name" value="{{ c.name }}" placeholder="الاسم" required>
+        <input name="phone" value="{{ c.phone or '' }}" placeholder="الجوال" required>
+        <select name="branch_id"><option value="">-</option>{% for b in branches %}<option value="{{ b.id }}" {% if c.branch_id==b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select>
+        <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" name="active" {% if c.active %}checked{% endif %}> مفعّل</label>
+        <button class="btn btn-sm btn-gold" type="submit">حفظ</button>
+      </form>
+    </details>
+    {% else %}<p class="muted" style="font-size:12.5px;">لا يوجد مدربون بعد</p>{% endfor %}
+    <form method="post" action="/settings/coaches/new" class="flex gap-8 flex-wrap" style="margin-top:12px;">
       <input name="name" placeholder="الاسم" required><input name="phone" placeholder="الجوال" required>
       <select name="branch_id">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
       <button class="btn btn-sm btn-outline" type="submit">+ إضافة</button>
