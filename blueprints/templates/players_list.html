@@ -18,6 +18,9 @@
   {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
   <a class="btn btn-primary" href="/players/new">+ لاعب جديد</a>
   {% endif %}
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER'] %}
+  <a class="btn btn-outline" href="/admin/bulk-activate-subscriptions">🔁 تفعيل حالة الاشتراك دفعة واحدة</a>
+  {% endif %}
 </div>
 
 {% set can_bulk = current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}

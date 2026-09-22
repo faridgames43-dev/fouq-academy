@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}تفعيل حالة الاشتراك دفعة واحدة{% endblock %}
+{% block page_title %}تفعيل حالة الاشتراك لكل اللاعبين{% endblock %}
+{% block content %}
+
+<div class="section card" style="border-right:4px solid var(--gold);">
+  <p><b>⚠️ هذه عملية دفعة واحدة تؤثر على السجلات المالية والاشتراكات لكل اللاعبين — راجع الجدول أدناه كاملًا قبل التأكيد. لا يتم حفظ أي شيء حتى تضغط "تأكيد التنفيذ".</b></p>
+  <p class="muted" style="font-size:13px;">القواعد المطبّقة: كل لاعبي أكاديمية فوق (FOUQ) يُفعَّل اشتراكهم (فترة جديدة 30 يوم) بغض النظر عن رصيدهم — ومن كان رصيده صفرًا فقط تُضاف له 8 حصص. لاعبو نادي تواصل الرياضي السابقين (LEGACY) يُفعَّل اشتراكهم فقط إذا كان عندهم رصيد حصص متبقٍّ (رصيدهم لا يُعدَّل). من كان اشتراكه ساري بالفعل أو مجمّدًا أو ملغى يُترك كما هو. كل اشتراك يُنشأ يُسجَّل كمدفوع بالكامل بسعر أرخص باقة نشطة تطابق فرع/فئة اللاعب.</p>
+</div>
+
+<div class="section grid grid-3">
+  <div class="card"><div class="card-title">إجمالي اللاعبين</div><div style="font-size:24px;font-weight:800;">{{ summary.total }}</div></div>
+  <div class="card"><div class="card-title">سيُفعَّل اشتراكهم</div><div style="font-size:24px;font-weight:800;color:#158a4d;">{{ summary.activate_count }}</div></div>
+  <div class="card"><div class="card-title">سيُتركون كما هم</div><div style="font-size:24px;font-weight:800;color:#93650a;">{{ summary.skip_count }}</div></div>
+  <div class="card"><div class="card-title">تعبئة رصيد إلى 8 حصص</div><div style="font-size:22px;font-weight:800;">{{ summary.topup_count }}</div></div>
+  <div class="card"><div class="card-title">إجمالي يُسجَّل كإيراد مدفوع</div><div style="font-size:22px;font-weight:800;">{{ "%.0f"|format(summary.total_revenue) }} ر.س</div></div>
+</div>
+
+<div class="section">
+  <form method="post" action="/admin/bulk-activate-subscriptions/confirm"
+        onsubmit="return confirm('هل أنت متأكد؟ سيتم إنشاء {{ summary.activate_count }} اشتراك جديد وتعديل رصيد {{ summary.topup_count }} لاعب — هذا الإجراء لا يمكن التراجع عنه تلقائيًا.');">
+    <button class="btn btn-gold" type="submit">✅ تأكيد التنفيذ ({{ summary.activate_count }} لاعب)</button>
+    <a class="btn btn-outline" href="/players">إلغاء والعودة لقائمة اللاعبين</a>
+  </form>
+</div>
+
+<div class="section">
+  <div class="card-title" style="margin:0 0 8px;">اللاعبون الذين سيُفعَّل اشتراكهم ({{ to_activate|length }})</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>اللاعب</th><th>الكود</th><th>النوع</th><th>الفرع/الفئة</th>
+        <th>الحالة الحالية</th><th>الرصيد الحالي</th><th>تعبئة</th><th>الرصيد بعد التنفيذ</th>
+        <th>الباقة المسجَّلة</th><th>السعر</th>
+      </tr></thead>
+      <tbody>
+        {% for r in to_activate %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td>{{ r.player_code }}</td>
+          <td>{% if r.player_type=='LEGACY' %}<span class="badge badge-purple">تواصل سابقًا</span>{% else %}<span class="badge badge-blue">فوق</span>{% endif %}</td>
+          <td>{{ r.branch_name }} — {{ r.category_name }}</td>
+          <td><span class="badge badge-gray">{{ r.current_sub_status }}</span></td>
+          <td>{{ r.current_balance }}</td>
+          <td>{% if r.topup %}<span class="badge badge-green">+{{ r.topup }}</span>{% else %}-{% endif %}</td>
+          <td><b>{{ r.new_balance }}</b></td>
+          <td>{{ r.package_name }}</td>
+          <td>{{ "%.0f"|format(r.price) }} ر.س</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="muted">لا يوجد أي لاعب يحتاج تفعيلًا حاليًا</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <div class="card-title" style="margin:0 0 8px;">اللاعبون الذين سيُتركون كما هم ({{ skipped|length }})</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>اللاعب</th><th>الكود</th><th>النوع</th><th>الحالة الحالية</th><th>الرصيد الحالي</th><th>السبب</th>
+      </tr></thead>
+      <tbody>
+        {% for r in skipped %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td>{{ r.player_code }}</td>
+          <td>{% if r.player_type=='LEGACY' %}<span class="badge badge-purple">تواصل سابقًا</span>{% else %}<span class="badge badge-blue">فوق</span>{% endif %}</td>
+          <td><span class="badge badge-gray">{{ r.current_sub_status }}</span></td>
+          <td>{{ r.current_balance }}</td>
+          <td class="muted">{{ r.reason }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">لا يوجد</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
