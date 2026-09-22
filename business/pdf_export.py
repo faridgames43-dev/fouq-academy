@@ -327,7 +327,7 @@ def build_credentials_pdf(created_players, unified_password):
     is the list returned by business.bulk_import.import_players()."""
     grouped = {}
     for p in created_players:
-        grouped.setdefault(p["category_name"], []).append(p)
+        grouped.setdefault(p["category_name"] or "بدون فئة", []).append(p)
     for cat in grouped:
         grouped[cat].sort(key=lambda p: (p["first_name"], p["last_name"]))
 
