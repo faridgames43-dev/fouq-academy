@@ -70,6 +70,61 @@ def add_compensation(player_id):
     return render_template("compensation_form.html", player=player, default_days=default_days)
 
 
+ENTITLEMENT_TYPE_LABELS = {
+    "REGULAR": "أساسية (من الاشتراك)",
+    "COMPENSATION": "تعويضية",
+    "BONUS": "إضافية",
+    "LEGACY": "سابقة (نادي تواصل الرياضي)",
+}
+
+
+@bp.route("/players/<int:player_id>/entitlements/adjust", methods=["GET", "POST"])
+@permission_required("manage_compensation")
+def adjust_entitlements(player_id):
+    """General-purpose manual add/remove of session credits, of any type and
+    any quantity — for corrections that don't fit the subscription or
+    compensation flows (e.g. a data-entry fix, a goodwill gesture, syncing
+    with a paper record). Always goes through administrative_adjustment so
+    a removal can never push a balance negative, and every change is
+    ledgered + audit-logged like any other entitlement mutation."""
+    conn = get_conn()
+    player = q1(conn, "SELECT * FROM players WHERE id=?", (player_id,))
+    if not player:
+        conn.close()
+        abort(404)
+    if request.method == "POST":
+        f = request.form
+        etype = f.get("etype")
+        action = f.get("action")
+        reason = (f.get("reason") or "").strip()
+        try:
+            qty = int(f.get("quantity", 0))
+        except (TypeError, ValueError):
+            qty = 0
+        if etype not in ENTITLEMENT_TYPE_LABELS or action not in ("add", "remove") or qty <= 0:
+            conn.close()
+            flash("تأكد من اختيار نوع الحصص والإجراء وكمية صحيحة أكبر من صفر")
+            return redirect(f"/players/{player_id}/entitlements/adjust")
+        if not reason:
+            reason = "إضافة يدوية من الإدارة" if action == "add" else "خصم يدوي من الإدارة"
+        delta = qty if action == "add" else -qty
+        try:
+            ent.administrative_adjustment(conn, player_id, etype, delta, reason, g.user["id"])
+        except ent.EntitlementError as e:
+            conn.close()
+            flash(str(e))
+            return redirect(f"/players/{player_id}/entitlements/adjust")
+        conn.commit()
+        conn.close()
+        verb = "إضافة" if action == "add" else "خصم"
+        flash(f"تم {verb} {qty} حصة ({ENTITLEMENT_TYPE_LABELS[etype]}) — {player['first_name']} {player['last_name']}")
+        return redirect(f"/players/{player_id}")
+    balances = ent.get_balances(conn, player_id)
+    conn.close()
+    return render_template("entitlement_adjust_form.html", player=player, balances=balances,
+                            type_labels=ENTITLEMENT_TYPE_LABELS)
+
+
 @bp.route("/players/<int:player_id>/subscriptions/<int:sub_id>/freeze", methods=["POST"])
 @permission_required("manage_subscriptions")
 def freeze(player_id, sub_id):
