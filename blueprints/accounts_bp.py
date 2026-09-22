@@ -10,7 +10,7 @@ from business.accounts import create_user_account, find_parent_by_phone, Account
 from business.audit import log as audit_log
 from business import reset_demo
 from business import bulk_import
-from business.pdf_export import build_credentials_pdf, build_login_guide_pdf, LOGIN_GUIDE_STEPS
+from business.pdf_export import build_credentials_pdf, build_login_guide_pdf, LOGIN_GUIDE_STEPS, build_full_roster_pdf
 import json
 import io
 import os
@@ -107,6 +107,45 @@ def login_guide_pdf():
     paths = [os.path.join(base, f"{i:02d}.png") for i in range(1, len(LOGIN_GUIDE_STEPS) + 1)]
     buf = build_login_guide_pdf(paths)
     return send_file(buf, as_attachment=True, download_name="دليل_تسجيل_الدخول.pdf", mimetype="application/pdf")
+
+
+@bp.route("/accounts/export-fouq-roster", methods=["GET"])
+@permission_required("manage_players")
+def export_fouq_roster_preview():
+    """Preview before download: shows exactly who will be in the export
+    (count + alphabetical list) so an admin can verify it — FOUQ players
+    only (player_type='FOUQ'); LEGACY (نادي تواصل الرياضي السابق) players
+    are excluded since they don't belong to أكاديمية فوق. Temporary
+    passwords are never shown here or in the PDF — they're one-way hashed
+    in the database and cannot be recovered once set."""
+    conn = get_conn()
+    players = q(conn, """
+        SELECT p.id, p.first_name, p.last_name, p.player_code AS code, p.status,
+               b.name AS branch_name, c.name AS category_name
+        FROM players p
+        LEFT JOIN branches b ON b.id = p.branch_id
+        LEFT JOIN categories c ON c.id = p.category_id
+        WHERE p.player_type = 'FOUQ'
+        ORDER BY p.first_name, p.last_name
+    """)
+    conn.close()
+    return render_template("export_fouq_roster_preview.html", players=players, count=len(players))
+
+
+@bp.route("/accounts/export-fouq-roster.pdf", methods=["GET"])
+@permission_required("manage_players")
+def export_fouq_roster_pdf():
+    conn = get_conn()
+    players = q(conn, """
+        SELECT p.first_name, p.last_name, p.player_code AS code
+        FROM players p
+        WHERE p.player_type = 'FOUQ'
+        ORDER BY p.first_name, p.last_name
+    """)
+    conn.close()
+    buf = build_full_roster_pdf([dict(p) for p in players])
+    return send_file(buf, as_attachment=True, download_name="بيانات_لاعبي_أكاديمية_فوق.pdf",
+                      mimetype="application/pdf")
 
 
 @bp.route("/accounts/import/template.xlsx", methods=["GET"])
