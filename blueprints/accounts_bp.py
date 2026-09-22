@@ -10,9 +10,10 @@ from business.accounts import create_user_account, find_parent_by_phone, Account
 from business.audit import log as audit_log
 from business import reset_demo
 from business import bulk_import
-from business.pdf_export import build_credentials_pdf
+from business.pdf_export import build_credentials_pdf, build_login_guide_pdf, LOGIN_GUIDE_STEPS
 import json
 import io
+import os
 
 bp = Blueprint("accounts_bp", __name__)
 
@@ -92,6 +93,20 @@ def new_staff():
 def import_players_form():
     suggested_password = generate_password()
     return render_template("accounts_import.html", suggested_password=suggested_password)
+
+
+@bp.route("/accounts/login-guide.pdf", methods=["GET"])
+@permission_required("manage_players")
+def login_guide_pdf():
+    """Generic, reusable 'how to log in' walkthrough (no player names or
+    real secrets — screenshots of a disposable demo account) — a separate,
+    standalone handout so it never needs regenerating per-import; can be
+    downloaded any time and re-printed alongside any batch of credential
+    cards."""
+    base = os.path.join("static", "img", "login_guide")
+    paths = [os.path.join(base, f"{i:02d}.png") for i in range(1, len(LOGIN_GUIDE_STEPS) + 1)]
+    buf = build_login_guide_pdf(paths)
+    return send_file(buf, as_attachment=True, download_name="دليل_تسجيل_الدخول.pdf", mimetype="application/pdf")
 
 
 @bp.route("/accounts/import/template.xlsx", methods=["GET"])
