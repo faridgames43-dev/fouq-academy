@@ -13,8 +13,8 @@
 
   <div class="print-section-title">ملخص اللاعب</div>
   <table class="print-table">
-    <tr><td>الفئة</td><td>{{ player.category_name }}</td><td>الفرع</td><td>{{ player.branch_name }}</td></tr>
-    <tr><td>المجموعة</td><td>{{ player.group_name }}</td><td>المدرب</td><td>{{ player.coach_name }}</td></tr>
+    <tr><td>الفئة</td><td>{{ player.category_name or 'بدون فئة' }}</td><td>الفرع</td><td>{{ player.branch_name }}</td></tr>
+    <tr><td>المجموعة</td><td>{{ player.group_name or 'بدون مجموعة' }}</td><td>المدرب</td><td>{{ player.coach_name or '-' }}</td></tr>
     <tr><td>المستوى الحالي</td><td>{{ level.name if level else '-' }}</td><td>رصيد فوق</td><td>{{ points }} ⭐</td></tr>
   </table>
 

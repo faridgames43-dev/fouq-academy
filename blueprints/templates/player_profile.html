@@ -10,7 +10,7 @@
   <div style="flex:1;">
     <span class="level-chip">{{ level.name if level else 'الانطلاقة' }}</span>
     <h1>{{ player.first_name }} {{ player.last_name }}</h1>
-    <div class="muted" style="color:#cfd9ea;">{{ player.player_code }} · {{ player.category_name }} · {{ player.group_name or 'بدون مجموعة' }} · المدرب: {{ player.coach_name or '-' }}</div>
+    <div class="muted" style="color:#cfd9ea;">{{ player.player_code }} · {{ player.category_name or 'بدون فئة' }} · {{ player.group_name or 'بدون مجموعة' }} · المدرب: {{ player.coach_name or '-' }}</div>
     {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
     <form method="post" action="/players/{{ player.id }}/photo" enctype="multipart/form-data" style="margin-top:6px;">
       <label class="btn btn-sm btn-outline" for="hero-photo-input" style="cursor:pointer;">📷 تغيير الصورة</label>
