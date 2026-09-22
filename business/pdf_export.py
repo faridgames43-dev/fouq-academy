@@ -35,11 +35,16 @@ FONT_BOLD = "FoqArabic-Bold"
 NAVY = colors.HexColor("#0b1f35")
 NAVY_DARK = colors.HexColor("#051323")
 GOLD = colors.HexColor("#cf931e")
+GOLD_LIGHT = colors.HexColor("#e8b94f")
 TEXT_DIM = colors.HexColor("#5b6478")
 BORDER = colors.HexColor("#e6e9f2")
+CARD_BG = colors.HexColor("#f7f9fc")
+
+LOGIN_URL = "https://fouq-academy.onrender.com/login"
 
 _FONT_READY = {"ok": False}
 _LOGO_CACHE = {}
+_QR_CACHE = {}
 
 FONT_SOURCES = [
     ("https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/amiri/Amiri-Regular.ttf",
@@ -148,6 +153,27 @@ def _get_small_logo():
     except Exception:
         reader = None
     _LOGO_CACHE["reader"] = reader
+    return reader
+
+
+def _get_login_qr(url=LOGIN_URL):
+    """A small QR code encoding the login page URL, generated once and
+    reused across every card/page — lets a parent just scan-to-open the
+    site on their phone instead of typing the address."""
+    if url in _QR_CACHE:
+        return _QR_CACHE[url]
+    reader = None
+    try:
+        import qrcode
+        from reportlab.lib.utils import ImageReader
+        img = qrcode.make(url, border=1, box_size=6)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        reader = ImageReader(buf)
+    except Exception:
+        reader = None
+    _QR_CACHE[url] = reader
     return reader
 
 
@@ -320,11 +346,52 @@ def build_monthly_report_pdf(data):
     return buf
 
 
+def _draw_credential_card(c, x, y_top, w, h, regular, bold, player_name, username, password):
+    """One bordered 'ticket' for a single player: QR to the login page on
+    one side, name + username + password on the other, a gold accent bar
+    marking the brand — designed to be cut along the dashed line below each
+    card and handed to one family at a time."""
+    y_bot = y_top - h
+    c.setFillColor(CARD_BG)
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(1)
+    c.roundRect(x, y_bot, w, h, 7, fill=1, stroke=1)
+    c.setFillColor(GOLD)
+    c.roundRect(x + w - 5, y_bot, 5, h, 2.5, fill=1, stroke=0)
+
+    qr_size = h - 22
+    qr = _get_login_qr()
+    if qr:
+        c.drawImage(qr, x + 14, y_bot + (h - qr_size) / 2, width=qr_size, height=qr_size,
+                    preserveAspectRatio=True, mask="auto")
+
+    text_right = x + w - 18
+    c.setFillColor(NAVY)
+    c.setFont(bold, 13)
+    c.drawRightString(text_right, y_top - 24, ar(player_name))
+
+    label_w = 78
+    for i, (label, value) in enumerate((("اسم المستخدم", username), ("كلمة المرور", password))):
+        row_y = y_top - 46 - i * 24
+        c.setFillColor(TEXT_DIM)
+        c.setFont(regular, 9.5)
+        c.drawRightString(text_right, row_y, ar(label))
+        pill_w = 108
+        pill_x = text_right - label_w - pill_w
+        c.setFillColor(colors.white)
+        c.setStrokeColor(GOLD_LIGHT)
+        c.roundRect(pill_x, row_y - 12, pill_w, 18, 4, fill=1, stroke=1)
+        c.setFillColor(NAVY)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawCentredString(pill_x + pill_w / 2, row_y - 6.5, value)
+
+
 def build_credentials_pdf(created_players, unified_password):
-    """One handout PDF, grouped by category, listing each newly-imported
-    player's name / login username (their player code) / initial shared
-    password — meant to be printed/split and handed to parents. created_players
-    is the list returned by business.bulk_import.import_players()."""
+    """One handout PDF, grouped by category, one credential 'ticket' card
+    per newly-imported player (name / login username / initial shared
+    password + a QR straight to the login page) — meant to be printed and
+    cut along the dashed lines, one card per family. created_players is
+    the list returned by business.bulk_import.import_players()."""
     grouped = {}
     for p in created_players:
         grouped.setdefault(p["category_name"] or "بدون فئة", []).append(p)
@@ -336,49 +403,155 @@ def build_credentials_pdf(created_players, unified_password):
     width, height = A4
     regular, bold = ensure_fonts()
     y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور",
-                          "أكاديمية فوق — يرجى تسليم كل عائلة سطرها الخاص فقط")
+                          "أكاديمية فوق — قصّ كل بطاقة وتسليمها لعائلتها فقط")
 
     c.setFillColor(TEXT_DIM)
     c.setFont(regular, 9.5)
-    note = (f"رابط الدخول: fouq-academy.onrender.com — كلمة المرور المبدئية لكل اللاعبين أدناه: "
-            f"{unified_password} (سيُطلب من اللاعب تغييرها بنفسه عند أول تسجيل دخول)")
+    note = (f"رابط الدخول: fouq-academy.onrender.com (أو مسح رمز QR على كل بطاقة) — كلمة المرور "
+            f"المبدئية لكل اللاعبين أدناه: {unified_password} (سيُطلب تغييرها عند أول دخول — راجعوا "
+            f"الدليل المرفق «كيف تسجّل الدخول» لشرح خطوة بخطوة)")
     c.drawRightString(width - 40, y, ar(note))
     y -= 26
 
+    card_h = 92
+    card_gap = 14
+
     for cat_name, players in grouped.items():
-        est_h = 32 + 22 * (len(players) + 1)
-        if y - min(est_h, 140) < 60:
+        needed = 30 + (card_h + card_gap) * min(len(players), 2)
+        if y - needed < 60:
             _draw_footer(c, width)
             c.showPage()
             y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", "تابع")
 
         y = _section_title(c, y, width, f"الفئة: {cat_name} ({len(players)} لاعب)")
-        header = ["اسم اللاعب", "اسم المستخدم (كود اللاعب)", "كلمة المرور"][::-1]
-        table_data = [[ar(h) for h in header]]
+
         for p in players:
-            row = [f"{p['first_name']} {p['last_name']}", p["code"], unified_password][::-1]
-            table_data.append([ar(v) for v in row])
-        col_w = (width - 80) / 3
-        t = Table(table_data, colWidths=[col_w] * 3, repeatRows=1)
-        t.setStyle(TableStyle([
-            ("FONT", (0, 0), (-1, -1), regular, 9.5),
-            ("FONT", (0, 0), (-1, 0), bold, 10),
-            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fafbfe")]),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        tw, th = t.wrapOn(c, width - 80, height)
-        if th > y - 60:
+            if y - card_h < 60:
+                _draw_footer(c, width)
+                c.showPage()
+                y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", "تابع")
+
+            _draw_credential_card(c, 40, y, width - 80, card_h, regular, bold,
+                                   f"{p['first_name']} {p['last_name']}", p["code"], unified_password)
+            y -= card_h + 6
+            c.setDash(3, 3)
+            c.setStrokeColor(colors.HexColor("#c7cee0"))
+            c.line(40, y, width - 40, y)
+            c.setDash()
+            y -= card_gap
+
+    _draw_footer(c, width)
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+LOGIN_GUIDE_STEPS = [
+    ("١", "افتح رابط الموقع", "افتح رابط تسجيل الدخول من المتصفح، أو امسح رمز QR الموجود على بطاقة الدخول الخاصة باللاعب."),
+    ("٢", "أدخل اسم المستخدم", "اكتب رمز اللاعب (مثل FOUQ-0000) الموجود على البطاقة في خانة «البريد الإلكتروني أو رقم الجوال»."),
+    ("٣", "أدخل كلمة المرور", "اكتب كلمة المرور المبدئية المطبوعة على البطاقة، ثم اضغط زر «دخول»."),
+    ("٤", "غيّر كلمة المرور", "عند أول دخول سيُطلب تغيير كلمة المرور المبدئية إلى كلمة مرور خاصة — أدخل الحالية ثم الجديدة مرتين."),
+    ("٥", "احفظ كلمة المرور الجديدة", "اضغط «حفظ كلمة المرور الجديدة» — بعدها لن تُستخدم كلمة المرور المبدئية مرة أخرى."),
+    ("٦", "ادخل لحسابك", "سيظهر لك تنبيه بنجاح العملية وتنتقل مباشرة إلى لوحة اللاعب، حيث تجد رصيد الحصص والنقاط وتطورك."),
+]
+
+
+def build_login_guide_pdf(screenshot_paths):
+    """Generic, reusable 'how to log in' walkthrough — contains NO player
+    names or real secrets, only a fixed set of numbered steps each paired
+    with a real screenshot of the actual login flow (captured against a
+    disposable demo account). Meant to be handed out / re-downloaded once
+    and reused for every family, independent of any specific player's
+    credentials card. screenshot_paths: list of 6 local PNG file paths in
+    the same order as LOGIN_GUIDE_STEPS."""
+    from reportlab.lib.utils import ImageReader
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    regular, bold = ensure_fonts()
+
+    def new_page(subtitle="أكاديمية فوق"):
+        return _draw_letterhead(c, width, height, "دليل تسجيل الدخول لحساب اللاعب", subtitle)
+
+    y = new_page()
+    c.setFillColor(TEXT_DIM)
+    c.setFont(regular, 9.5)
+    intro = ("هذا الدليل عام وقابل لإعادة الاستخدام لكل العائلات — بيانات الدخول (اسم المستخدم وكلمة "
+              "المرور) موجودة فقط على بطاقة اللاعب الخاصة بكم، وليست في هذا الملف.")
+    c.drawRightString(width - 40, y, ar(intro))
+    y -= 28
+
+    col_gap = 24
+    col_w = (width - 80 - col_gap) / 2
+    img_w = col_w
+    img_h = img_w * (760 / 480)
+    max_img_h = 300
+    if img_h > max_img_h:
+        img_h = max_img_h
+        img_w = img_h * (480 / 760)
+
+    def draw_step(x, top_y, num, title, desc, img_path):
+        badge_r = 13
+        c.setFillColor(GOLD)
+        c.circle(x + badge_r, top_y - badge_r, badge_r, fill=1, stroke=0)
+        c.setFillColor(NAVY_DARK)
+        c.setFont(bold, 12)
+        c.drawCentredString(x + badge_r, top_y - badge_r - 4, num)
+
+        c.setFillColor(NAVY)
+        c.setFont(bold, 11.5)
+        c.drawRightString(x + col_w, top_y - 10, ar(title))
+
+        c.setFillColor(TEXT_DIM)
+        c.setFont(regular, 8.7)
+        text_y = top_y - 26
+        import textwrap
+        for line in textwrap.wrap(desc, 46):
+            c.drawRightString(x + col_w, text_y, ar(line))
+            text_y -= 11
+
+        img_top = text_y - 8
+        try:
+            reader = ImageReader(img_path)
+            frame_x = x + (col_w - img_w) / 2
+            c.setStrokeColor(BORDER)
+            c.setLineWidth(1)
+            c.roundRect(frame_x - 3, img_top - img_h - 3, img_w + 6, img_h + 6, 5, fill=0, stroke=1)
+            c.drawImage(reader, frame_x, img_top - img_h, width=img_w, height=img_h,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+        return img_top - img_h - 18
+
+    pairs = list(zip(LOGIN_GUIDE_STEPS, screenshot_paths))
+    for i in range(0, len(pairs), 2):
+        chunk = pairs[i:i + 2]
+        if i > 0:
             _draw_footer(c, width)
             c.showPage()
-            y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", "تابع")
-            tw, th = t.wrapOn(c, width - 80, height)
-        t.drawOn(c, 40, y - th)
-        y = y - th - 24
+            y = new_page("تابع")
+        row_top = y
+        x = 40
+        for (num, title, desc), img_path in chunk:
+            draw_step(x, row_top, num, title, desc, img_path)
+            x += col_w + col_gap
+
+    # closing note + QR shortcut to the login page, on the last page
+    y2 = 150
+    c.setFillColor(NAVY)
+    c.roundRect(40, y2 - 90, width - 80, 90, 8, fill=1, stroke=0)
+    qr = _get_login_qr()
+    if qr:
+        c.drawImage(qr, width - 40 - 74, y2 - 82, width=74, height=74, preserveAspectRatio=True, mask="auto")
+    c.setFillColor(colors.white)
+    c.setFont(bold, 11.5)
+    c.drawRightString(width - 130, y2 - 28, ar("امسح الرمز لفتح صفحة الدخول مباشرة"))
+    c.setFont(regular, 9)
+    c.setFillColor(colors.HexColor("#cfd9ea"))
+    c.drawRightString(width - 130, y2 - 46, ar("أو زوروا: " + LOGIN_URL.replace("https://", "")))
+    c.drawRightString(width - 130, y2 - 62, ar("لأي استفسار تواصلوا مع إدارة الأكاديمية."))
 
     _draw_footer(c, width)
     c.showPage()
