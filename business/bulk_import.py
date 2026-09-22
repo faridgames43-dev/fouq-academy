@@ -17,15 +17,30 @@ everyone's first sign-in.
 from datetime import date, datetime
 from db import q, q1, ex
 from business.accounts import create_user_account, create_user_account_with_password, find_parent_by_phone
+from business.entitlements import grant_entitlement
 from business.audit import log as audit_log
+
+SUBSCRIBER_TYPE_LEGACY = "مشترك سابقاً بنادي تواصل الرياضي"
+SUBSCRIBER_TYPE_FOUQ = "مشترك جديد بأكاديمية فوق"
 
 HEADERS = [
     "الاسم الأول", "اسم العائلة", "تاريخ الميلاد (اختياري — مثال: 2016-05-20)", "الجنس (ذكر / أنثى)",
     "الفئة", "الفرع", "المجموعة (اختياري)", "اسم ولي الأمر (اختياري)", "جوال ولي الأمر (اختياري)",
+    "نوع المشترك", "عدد الحصص المتبقية (اختياري)",
 ]
-COL_FIRST, COL_LAST, COL_DOB, COL_GENDER, COL_CATEGORY, COL_BRANCH, COL_GROUP, COL_PARENT_NAME, COL_PARENT_PHONE = range(9)
+(COL_FIRST, COL_LAST, COL_DOB, COL_GENDER, COL_CATEGORY, COL_BRANCH, COL_GROUP, COL_PARENT_NAME,
+ COL_PARENT_PHONE, COL_SUBSCRIBER_TYPE, COL_REMAINING_SESSIONS) = range(11)
 
 GENDER_MAP = {"ذكر": "M", "أنثى": "F", "انثى": "F", "m": "M", "f": "F", "M": "M", "F": "F"}
+
+# اكتب "نوع المشترك" بالضبط كأحد هذين الخيارين (أو اتركه فارغًا = مشترك جديد
+# بأكاديمية فوق افتراضيًا). يطابق حقل player_type الحالي في النظام
+# (LEGACY لنادي تواصل الرياضي السابق، FOUQ للعضوية الجديدة).
+SUBSCRIBER_TYPE_MAP = {
+    SUBSCRIBER_TYPE_LEGACY: "LEGACY",
+    "مشترك سابقا بنادي تواصل الرياضي": "LEGACY",
+    SUBSCRIBER_TYPE_FOUQ: "FOUQ",
+}
 
 
 def _norm(v):
@@ -66,7 +81,8 @@ def build_template_workbook(conn):
 
     example = ["مثال: عبدالله", "الأحمدي", "2016-05-20", "ذكر",
                categories[0]["name"] if categories else "الأشبال",
-               branches[0]["name"] if branches else "فرع الدمام", "", "سلمان الأحمدي", "0512345678"]
+               branches[0]["name"] if branches else "فرع الدمام", "", "سلمان الأحمدي", "0512345678",
+               SUBSCRIBER_TYPE_FOUQ, ""]
     example_font = Font(italic=True, color="9AA3B5")
     for i, v in enumerate(example, start=1):
         c = ws.cell(row=2, column=i, value=v)
@@ -118,6 +134,11 @@ def build_template_workbook(conn):
     ws.add_data_validation(dv_gender)
     dv_gender.add("D3:D200")
 
+    dv_subscriber_type = DataValidation(
+        type="list", formula1=f'"{SUBSCRIBER_TYPE_LEGACY},{SUBSCRIBER_TYPE_FOUQ}"', allow_blank=True)
+    ws.add_data_validation(dv_subscriber_type)
+    dv_subscriber_type.add("J3:J200")
+
     instructions = wb.create_sheet("تعليمات", 0)
     instructions.sheet_view.rightToLeft = True
     instructions["A1"] = "تعليمات تعبئة النموذج"
@@ -128,7 +149,9 @@ def build_template_workbook(conn):
         "3) اكتب الفئة والفرع بنفس الإملاء الموجود بالضبط في تبويب «الفئات والفروع والمجموعات» — أو اختر من القائمة المنسدلة في كل خلية. عمود المجموعة اختياري: اكتب اسم المجموعة فقط (عمود C في تبويب المرجع) بدون الفرع أو الفئة.",
         "4) إذا كتبت تاريخ الميلاد، اكتبه بصيغة سنة-شهر-يوم، مثال: 2016-05-20.",
         "5) اسم ولي الأمر وجواله اختياريان لكن يُفضّل تعبئتهما — إذا كان لولي الأمر أكثر من لاعب، استخدم نفس رقم الجوال بالضبط لكل أبنائه حتى يُربطوا بنفس الحساب.",
-        "6) بعد التعبئة احفظ الملف وارفعه من صفحة «الحسابات ← استيراد من إكسل».",
+        "6) نوع المشترك: اختر «مشترك سابقاً بنادي تواصل الرياضي» أو «مشترك جديد بأكاديمية فوق» من القائمة المنسدلة — إذا تُرك فارغًا يُعتبر «مشترك جديد بأكاديمية فوق» تلقائيًا.",
+        "7) عدد الحصص المتبقية اختياري — إذا كان عنده حصص سابقة لم يستخدمها (خصوصًا لاعبي نادي تواصل الرياضي)، اكتب العدد وسيُضاف لرصيده تلقائيًا عند الاستيراد. اتركه فارغًا أو صفر إذا ما عنده رصيد سابق.",
+        "8) بعد التعبئة احفظ الملف وارفعه من صفحة «الحسابات ← استيراد من إكسل».",
     ]
     for i, line in enumerate(lines, start=3):
         instructions.cell(row=i, column=1, value=line)
@@ -169,7 +192,7 @@ def parse_workbook(conn, file_stream):
     errors = []
     rows = []
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        cells = list(row) + [None] * (9 - len(row))
+        cells = list(row) + [None] * (11 - len(row))
         first = _norm(cells[COL_FIRST])
         last = _norm(cells[COL_LAST])
         if not first and not last:
@@ -184,6 +207,8 @@ def parse_workbook(conn, file_stream):
         group_raw = _norm(cells[COL_GROUP])
         parent_name = _norm(cells[COL_PARENT_NAME]) or None
         parent_phone = _norm(cells[COL_PARENT_PHONE]) or None
+        subscriber_type_raw = _norm(cells[COL_SUBSCRIBER_TYPE])
+        remaining_sessions_raw = _norm(cells[COL_REMAINING_SESSIONS])
 
         row_errors = []
         if not first:
@@ -224,6 +249,28 @@ def parse_workbook(conn, file_stream):
             if not group:
                 row_errors.append(f"المجموعة '{group_raw}' غير موجودة في الفرع '{branch_raw}'")
 
+        # نوع المشترك اختياري — فارغ = مشترك جديد بأكاديمية فوق (FOUQ) افتراضيًا.
+        if not subscriber_type_raw:
+            player_type = "FOUQ"
+        elif subscriber_type_raw in SUBSCRIBER_TYPE_MAP:
+            player_type = SUBSCRIBER_TYPE_MAP[subscriber_type_raw]
+        else:
+            player_type = None
+            row_errors.append(
+                f"نوع المشترك '{subscriber_type_raw}' غير معروف — اكتب بالضبط "
+                f"'{SUBSCRIBER_TYPE_LEGACY}' أو '{SUBSCRIBER_TYPE_FOUQ}' أو اتركه فارغًا")
+
+        # عدد الحصص المتبقية اختياري — فارغ = صفر، وإذا كُتب يجب أن يكون رقمًا
+        # صحيحًا غير سالب.
+        remaining_sessions = 0
+        if remaining_sessions_raw:
+            try:
+                remaining_sessions = int(float(remaining_sessions_raw))
+                if remaining_sessions < 0:
+                    raise ValueError
+            except ValueError:
+                row_errors.append(f"عدد الحصص المتبقية '{remaining_sessions_raw}' غير صالح (يجب أن يكون رقمًا صحيحًا صفر أو أكبر)")
+
         if row_errors:
             errors.append(f"الصف {row_idx}: " + " — ".join(row_errors))
             continue
@@ -234,6 +281,7 @@ def parse_workbook(conn, file_stream):
             "branch_id": branch["id"], "group_id": group["id"] if group else None,
             "coach_id": group["coach_id"] if group else None,
             "parent_name": parent_name, "parent_phone": parent_phone,
+            "player_type": player_type, "remaining_sessions": remaining_sessions,
         })
 
     if not rows and not errors:
@@ -271,15 +319,22 @@ def import_players(conn, rows, unified_password, admin_user_id):
                           onboarding_json)
                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                  (code, player_uid, r["first_name"], r["last_name"], r["dob"], r["gender"],
-                  r["category_id"], r["branch_id"], r["group_id"], r["coach_id"], "FOUQ",
+                  r["category_id"], r["branch_id"], r["group_id"], r["coach_id"], r["player_type"],
                   date.today().isoformat(), f"REF-{code}",
                   '{"account_created": true, "parent_linked": true, "group_assigned": true, "qr_issued": true}'))
         if parent_id:
             ex(conn, "INSERT INTO parent_players(parent_id, player_id) VALUES (?,?)", (parent_id, pid))
         ex(conn, "INSERT INTO points_wallets(player_id, balance) VALUES (?,0)", (pid,))
 
+        # عدد الحصص المتبقية (إن وجد) يُمنح كرصيد من النوع LEGACY — نفس السلوك
+        # المستخدم في نموذج إضافة لاعب واحد (previous_sessions) لضمان الاتساق.
+        if r["remaining_sessions"] > 0:
+            grant_entitlement(conn, pid, "LEGACY", r["remaining_sessions"], reason_code="ADMIN_DECISION",
+                               reason_text="حصص سابقة عند التسجيل (استيراد جماعي)", user_id=admin_user_id)
+
         audit_log(conn, admin_user_id, "BULK_IMPORT_PLAYER", "players", pid,
-                  after={"first_name": r["first_name"], "last_name": r["last_name"], "category": r["category_name"]},
+                  after={"first_name": r["first_name"], "last_name": r["last_name"], "category": r["category_name"],
+                         "player_type": r["player_type"], "remaining_sessions": r["remaining_sessions"]},
                   reason="استيراد جماعي من ملف إكسل")
 
         created.append({"id": pid, "code": code, "first_name": r["first_name"], "last_name": r["last_name"],
