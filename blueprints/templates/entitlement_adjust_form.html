@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}تعديل رصيد الحصص{% endblock %}
+{% block page_title %}تعديل رصيد الحصص — {{ player.first_name }} {{ player.last_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px;">
+  <p class="muted">
+    الرصيد الحالي: <b>{{ balances.TOTAL }}</b>
+    (أساسية {{ balances.REGULAR }} · تعويضية {{ balances.COMPENSATION }} · إضافية {{ balances.BONUS }} · سابقة {{ balances.LEGACY }})
+  </p>
+  <p class="muted" style="font-size:12.5px;">
+    استخدم هذا النموذج لإضافة أو خصم أي عدد من الحصص لأي سبب (تصحيح، هدية، مطابقة سجل ورقي...). كل عملية تُسجَّل في سجل التدقيق. الخصم لا يقدر ينزل الرصيد تحت الصفر.
+  </p>
+  <form method="post">
+    <div class="field"><label>الإجراء</label>
+      <div class="flex gap-8" style="margin-top:4px;">
+        <label class="flex" style="align-items:center;gap:6px;"><input type="radio" name="action" value="add" checked> ➕ إضافة</label>
+        <label class="flex" style="align-items:center;gap:6px;"><input type="radio" name="action" value="remove"> ➖ خصم</label>
+      </div>
+    </div>
+    <div class="field"><label>نوع الحصص</label>
+      <select name="etype" required>
+        {% for k, v in type_labels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field"><label>الكمية</label><input type="number" name="quantity" value="1" min="1" required></div>
+    <div class="field"><label>السبب (اختياري)</label><textarea name="reason" rows="2" placeholder="مثال: تصحيح رصيد بعد مراجعة السجل الورقي"></textarea></div>
+    <button class="btn btn-gold btn-block" type="submit">تنفيذ التعديل</button>
+  </form>
+</div>
+{% endblock %}

@@ -69,6 +69,7 @@
   <a class="btn btn-gold" href="/players/{{ player.id }}/subscribe">🔁 تجديد / اشتراك جديد</a>
   {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
   <a class="btn btn-outline" href="/players/{{ player.id }}/compensation/add">➕ إضافة حصص تعويضية</a>
+  <a class="btn btn-outline" href="/players/{{ player.id }}/entitlements/adjust">🔧 تعديل رصيد الحصص (إضافة/خصم)</a>
   <a class="btn btn-outline" href="/players/{{ player.id }}/points/add">⭐ إضافة رصيد فوق</a>
   {% endif %}
   {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR','COACH'] %}
