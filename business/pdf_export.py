@@ -8,12 +8,15 @@ shaping (joining letters) and bidi reordering before reportlab can draw it
 correctly, so `arabic_reshaper` + `python-bidi` are used for every piece of
 Arabic text drawn on the page.
 
-The Arabic TTF font itself is not committed to the repo (binary fonts can't
-be committed through this project's text-only deployment pipeline) — it is
-downloaded once and cached on first use, then reused for the life of the
-running process. If the download ever fails (e.g. no network), Arabic text
-falls back to a Latin font, which will render blank glyphs; the PDF still
-generates instead of crashing.
+The Arabic TTF font (Amiri, SIL Open Font License — see
+static/fonts/Amiri-OFL.txt) is bundled directly in the repo under
+static/fonts/, so rendering never depends on downloading anything at
+runtime — no flaky CDN, no "first request after a cold start is slow",
+and no silent fallback to a Latin font that can't draw Arabic glyphs at
+all (which is what previously caused Arabic text to render as solid
+boxes whenever the font download failed). A legacy download path is kept
+as a last-resort fallback only for the (very unlikely) case the bundled
+file is ever missing.
 """
 import io
 import os
@@ -27,7 +30,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Table, TableStyle
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FONT_DIR = os.path.join("/tmp", "fouq_fonts")
+BUNDLED_FONT_DIR = os.path.join(BASE_DIR, "static", "fonts")
+FONT_DIR = os.path.join("/tmp", "fouq_fonts")  # only used by the legacy download fallback
 
 FONT_REGULAR = "FoqArabic"
 FONT_BOLD = "FoqArabic-Bold"
@@ -68,20 +72,31 @@ def _download(url, dest):
 
 
 def ensure_fonts():
-    """Register the Arabic TTF fonts once per process. Safe to call repeatedly."""
+    """Register the Arabic TTF fonts once per process. Safe to call repeatedly.
+
+    Prefers the font bundled in the repo (static/fonts/) — deterministic,
+    no network needed. Only if that's somehow missing does it fall back to
+    downloading a copy (legacy behavior, kept as a safety net)."""
     if _FONT_READY["ok"]:
         return _FONT_READY["regular"], _FONT_READY["bold"]
-    reg_path = os.path.join(FONT_DIR, "Amiri-Regular.ttf")
-    bold_path = os.path.join(FONT_DIR, "Amiri-Bold.ttf")
-    got_regular = False
-    got_bold = False
-    for reg_url, bold_url in FONT_SOURCES:
-        if not got_regular:
-            got_regular = _download(reg_url, reg_path)
-        if not got_bold:
-            got_bold = _download(bold_url, bold_path)
-        if got_regular and got_bold:
-            break
+
+    bundled_reg = os.path.join(BUNDLED_FONT_DIR, "Amiri-Regular.ttf")
+    bundled_bold = os.path.join(BUNDLED_FONT_DIR, "Amiri-Bold.ttf")
+    got_regular = os.path.exists(bundled_reg) and os.path.getsize(bundled_reg) > 1000
+    got_bold = os.path.exists(bundled_bold) and os.path.getsize(bundled_bold) > 1000
+    reg_path, bold_path = bundled_reg, bundled_bold
+
+    if not (got_regular and got_bold):
+        reg_path = os.path.join(FONT_DIR, "Amiri-Regular.ttf")
+        bold_path = os.path.join(FONT_DIR, "Amiri-Bold.ttf")
+        for reg_url, bold_url in FONT_SOURCES:
+            if not got_regular:
+                got_regular = _download(reg_url, reg_path)
+            if not got_bold:
+                got_bold = _download(bold_url, bold_path)
+            if got_regular and got_bold:
+                break
+
     try:
         if got_regular and FONT_REGULAR not in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFont(TTFont(FONT_REGULAR, reg_path))
@@ -387,58 +402,53 @@ def _draw_credential_card(c, x, y_top, w, h, regular, bold, player_name, usernam
 
 
 def build_credentials_pdf(created_players, unified_password):
-    """One handout PDF, grouped by category, one credential 'ticket' card
+    """One handout PDF, players sorted alphabetically by name (spanning as
+    many pages as needed — never crammed), one credential 'ticket' card
     per newly-imported player (name / login username / initial shared
     password + a QR straight to the login page) — meant to be printed and
     cut along the dashed lines, one card per family. created_players is
     the list returned by business.bulk_import.import_players()."""
-    grouped = {}
-    for p in created_players:
-        grouped.setdefault(p["category_name"] or "بدون فئة", []).append(p)
-    for cat in grouped:
-        grouped[cat].sort(key=lambda p: (p["first_name"], p["last_name"]))
+    players = sorted(created_players, key=lambda p: (p["first_name"], p["last_name"]))
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
     regular, bold = ensure_fonts()
-    y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور",
-                          "أكاديمية فوق — قصّ كل بطاقة وتسليمها لعائلتها فقط")
 
-    c.setFillColor(TEXT_DIM)
-    c.setFont(regular, 9.5)
-    note = (f"رابط الدخول: fouq-academy.onrender.com (أو مسح رمز QR على كل بطاقة) — كلمة المرور "
-            f"المبدئية لكل اللاعبين أدناه: {unified_password} (سيُطلب تغييرها عند أول دخول — راجعوا "
-            f"الدليل المرفق «كيف تسجّل الدخول» لشرح خطوة بخطوة)")
-    c.drawRightString(width - 40, y, ar(note))
-    y -= 26
+    def new_page(subtitle):
+        yy = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", subtitle)
+        c.setFillColor(TEXT_DIM)
+        c.setFont(regular, 9.5)
+        note_lines = [
+            f"رابط الدخول: fouq-academy.onrender.com (أو مسح رمز QR على كل بطاقة)",
+            f"كلمة المرور المبدئية لكل اللاعبين أدناه: {unified_password} — سيُطلب تغييرها عند أول دخول.",
+            "راجعوا الدليل المرفق «دليل تسجيل الدخول» لشرح خطوة بخطوة بالصور.",
+        ]
+        for line in note_lines:
+            c.drawRightString(width - 40, yy, ar(line))
+            yy -= 14
+        yy = _section_title(c, yy - 6, width, f"اللاعبون مرتبون أبجديًا ({len(players)} لاعب)")
+        return yy
+
+    y = new_page("أكاديمية فوق — قصّ كل بطاقة وتسليمها لعائلتها فقط")
 
     card_h = 92
     card_gap = 14
 
-    for cat_name, players in grouped.items():
-        needed = 30 + (card_h + card_gap) * min(len(players), 2)
-        if y - needed < 60:
+    for p in players:
+        if y - card_h < 60:
             _draw_footer(c, width)
             c.showPage()
-            y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", "تابع")
+            y = new_page("تابع")
 
-        y = _section_title(c, y, width, f"الفئة: {cat_name} ({len(players)} لاعب)")
-
-        for p in players:
-            if y - card_h < 60:
-                _draw_footer(c, width)
-                c.showPage()
-                y = _draw_letterhead(c, width, height, "بيانات الدخول لأولياء الأمور", "تابع")
-
-            _draw_credential_card(c, 40, y, width - 80, card_h, regular, bold,
-                                   f"{p['first_name']} {p['last_name']}", p["code"], unified_password)
-            y -= card_h + 6
-            c.setDash(3, 3)
-            c.setStrokeColor(colors.HexColor("#c7cee0"))
-            c.line(40, y, width - 40, y)
-            c.setDash()
-            y -= card_gap
+        _draw_credential_card(c, 40, y, width - 80, card_h, regular, bold,
+                               f"{p['first_name']} {p['last_name']}", p["code"], unified_password)
+        y -= card_h + 6
+        c.setDash(3, 3)
+        c.setStrokeColor(colors.HexColor("#c7cee0"))
+        c.line(40, y, width - 40, y)
+        c.setDash()
+        y -= card_gap
 
     _draw_footer(c, width)
     c.showPage()
@@ -478,10 +488,14 @@ def build_login_guide_pdf(screenshot_paths):
     y = new_page()
     c.setFillColor(TEXT_DIM)
     c.setFont(regular, 9.5)
-    intro = ("هذا الدليل عام وقابل لإعادة الاستخدام لكل العائلات — بيانات الدخول (اسم المستخدم وكلمة "
-              "المرور) موجودة فقط على بطاقة اللاعب الخاصة بكم، وليست في هذا الملف.")
-    c.drawRightString(width - 40, y, ar(intro))
-    y -= 28
+    import textwrap
+    intro_lines = textwrap.wrap(
+        "هذا الدليل عام وقابل لإعادة الاستخدام لكل العائلات — بيانات الدخول (اسم المستخدم وكلمة "
+        "المرور) موجودة فقط على بطاقة اللاعب الخاصة بكم، وليست في هذا الملف.", 78)
+    for line in intro_lines:
+        c.drawRightString(width - 40, y, ar(line))
+        y -= 13
+    y -= 12
 
     col_gap = 24
     col_w = (width - 80 - col_gap) / 2
