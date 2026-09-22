@@ -21,6 +21,9 @@
   {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER'] %}
   <a class="btn btn-outline" href="/admin/bulk-activate-subscriptions">🔁 تفعيل حالة الاشتراك دفعة واحدة</a>
   {% endif %}
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER'] %}
+  <a class="btn btn-outline" href="/accounts/export-fouq-roster">📄 تصدير بيانات لاعبي أكاديمية فوق (PDF)</a>
+  {% endif %}
 </div>
 
 {% set can_bulk = current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
