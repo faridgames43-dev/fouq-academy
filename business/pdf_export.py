@@ -574,6 +574,133 @@ def build_login_guide_pdf(screenshot_paths):
     return buf
 
 
+def _draw_roster_block(c, x, y_top, w, h, regular, bold, seq_num, player_name, username, password, qr_reader):
+    """One player's record for the full-roster export: name (most
+    prominent), username, a temporary-password field left as an empty
+    fillable box whenever the real value isn't known (accounts created
+    before this export existed have no recoverable plaintext password —
+    passwords are stored as one-way hashes, so nothing is guessed or
+    invented here), and the player's own QR code at a size that's easy to
+    scan. Never split across a page break by the caller."""
+    y_bot = y_top - h
+    c.setFillColor(CARD_BG)
+    c.setStrokeColor(BORDER)
+    c.setLineWidth(1)
+    c.roundRect(x, y_bot, w, h, 8, fill=1, stroke=1)
+    c.setFillColor(GOLD)
+    c.roundRect(x + w - 5, y_bot, 5, h, 2.5, fill=1, stroke=0)
+
+    qr_size = min(h - 24, 100)
+    if qr_reader:
+        c.drawImage(qr_reader, x + 16, y_bot + (h - qr_size) / 2, width=qr_size, height=qr_size,
+                     preserveAspectRatio=True, mask="auto")
+
+    text_right = x + w - 20
+    badge_r = 12
+    badge_cx = text_right - badge_r
+    top_y = y_top - 24
+    c.setFillColor(GOLD)
+    c.circle(badge_cx, top_y, badge_r, fill=1, stroke=0)
+    c.setFillColor(NAVY_DARK)
+    c.setFont(bold, 10.5)
+    c.drawCentredString(badge_cx, top_y - 3.5, str(seq_num))
+
+    c.setFillColor(NAVY)
+    c.setFont(bold, 15)
+    c.drawRightString(text_right - badge_r * 2 - 10, top_y + 5, ar(player_name))
+
+    # Label-above-field layout (not side-by-side): a label's rendered
+    # width can't be predicted precisely for shaped Arabic text, so a
+    # side-by-side box positioned by estimated text width risks the box
+    # painting over part of the label when the estimate runs short. Each
+    # field gets its own full-width row instead, which is immune to that.
+    field_w = w - 40 - qr_size - 16
+    field_x = text_right - field_w
+    row_y = top_y - 32
+
+    c.setFillColor(TEXT_DIM)
+    c.setFont(regular, 9.5)
+    c.drawRightString(text_right, row_y, ar("اسم المستخدم"))
+    row_y -= 16
+    c.setFillColor(colors.white)
+    c.setStrokeColor(GOLD_LIGHT)
+    c.roundRect(field_x, row_y - 14, field_w, 20, 4, fill=1, stroke=1)
+    c.setFillColor(NAVY)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(field_x + field_w / 2, row_y - 7.5, username or "")
+
+    row_y -= 34
+    c.setFillColor(TEXT_DIM)
+    c.setFont(regular, 9.5)
+    c.drawRightString(text_right, row_y, ar("كلمة المرور المؤقتة"))
+    row_y -= 16
+    c.setFillColor(colors.white)
+    c.setStrokeColor(BORDER)
+    c.roundRect(field_x, row_y - 14, field_w, 20, 4, fill=1, stroke=1)
+    if password:
+        c.setFillColor(NAVY)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawCentredString(field_x + field_w / 2, row_y - 7.5, password)
+    # else: left intentionally empty (fillable by hand) — no placeholder text
+
+
+def build_full_roster_pdf(players):
+    """Full-roster export: every player already in the system whose
+    player_type is FOUQ (i.e. genuinely 'أكاديمية فوق' members — players
+    with player_type LEGACY belong to the previous Tawasol club and are
+    excluded), sorted alphabetically by name, one record per player, never
+    split across a page break. players: list of dicts with first_name,
+    last_name, code (player_code / login username), and optionally
+    password (left blank/None when not known — never invented)."""
+    from business.barcode import render_qr
+    from reportlab.lib.utils import ImageReader
+
+    ordered = sorted(players, key=lambda p: (p["first_name"], p["last_name"]))
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    regular, bold = ensure_fonts()
+
+    def new_page(subtitle):
+        yy = _draw_letterhead(c, width, height, "بيانات لاعبي أكاديمية فوق", subtitle)
+        c.setFillColor(TEXT_DIM)
+        c.setFont(regular, 9)
+        c.drawRightString(width - 40, yy, ar(
+            "قائمة موثّقة من نظام أكاديمية فوق فقط — لاعبو أكاديمية فوق (FOUQ) حصرًا، بدون أي لاعب من جهة أخرى."))
+        yy -= 22
+        return yy
+
+    y = new_page(f"{len(ordered)} لاعب — مرتبون أبجديًا")
+
+    block_h = 148
+    block_gap = 12
+
+    for i, p in enumerate(ordered, start=1):
+        if y - block_h < 60:
+            _draw_footer(c, width)
+            c.showPage()
+            y = new_page("تابع")
+
+        code = p.get("code") or ""
+        qr_reader = None
+        if code:
+            try:
+                qr_reader = ImageReader(io.BytesIO(render_qr(code)))
+            except Exception:
+                qr_reader = None
+
+        _draw_roster_block(c, 40, y, width - 80, block_h, regular, bold, i,
+                            f"{p['first_name']} {p['last_name']}", code, p.get("password"), qr_reader)
+        y -= block_h + block_gap
+
+    _draw_footer(c, width)
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
 def build_player_report_pdf(ctx):
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
