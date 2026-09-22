@@ -1,11 +1,12 @@
 from flask import Blueprint, render_template, request, redirect, g, flash, abort
 from datetime import date
 from db import get_conn, q, q1
-from business.rbac import permission_required
+from business.rbac import permission_required, roles_required
 from business import subscriptions as subs
 from business import entitlements as ent
 from business import legacy as leg
 from business import achievements as ach
+from business import bulk_activation as bact
 
 bp = Blueprint("subscriptions_bp", __name__)
 
@@ -144,3 +145,44 @@ def unfreeze(player_id, sub_id):
     conn.commit(); conn.close()
     flash("تم إلغاء التجميد")
     return redirect(f"/players/{player_id}")
+
+
+@bp.route("/admin/bulk-activate-subscriptions", methods=["GET"])
+@roles_required("SUPER_ADMIN", "PROJECT_MANAGER")
+def bulk_activate_preview():
+    """Read-only preview of the one-time bulk subscription-activation pass
+    — shows exactly what would happen to every player before anything is
+    written, since this touches financial/subscription records for the
+    whole player base at once. Nothing is saved until /confirm is posted."""
+    conn = get_conn()
+    subs.sync_subscription_statuses(conn)  # make sure current statuses are fresh before planning
+    plan = bact.compute_plan(conn)
+    conn.close()
+    to_activate = [r for r in plan if r["action"] == "activate"]
+    skipped = [r for r in plan if r["action"] == "skip"]
+    summary = {
+        "total": len(plan),
+        "activate_count": len(to_activate),
+        "topup_count": sum(1 for r in to_activate if r.get("topup")),
+        "skip_count": len(skipped),
+        "total_revenue": sum(r["price"] for r in to_activate),
+    }
+    return render_template("bulk_activate_preview.html", plan=plan, to_activate=to_activate,
+                            skipped=skipped, summary=summary)
+
+
+@bp.route("/admin/bulk-activate-subscriptions/confirm", methods=["POST"])
+@roles_required("SUPER_ADMIN", "PROJECT_MANAGER")
+def bulk_activate_confirm():
+    """Re-computes the plan fresh (never trusts what the browser posted
+    back) and applies it in one transaction, so nothing can slip in or
+    change between the human reviewing the preview and clicking confirm."""
+    conn = get_conn()
+    subs.sync_subscription_statuses(conn)
+    plan = bact.compute_plan(conn)
+    result = bact.execute_plan(conn, plan, g.user["id"])
+    conn.commit()
+    conn.close()
+    flash(f"✅ تم تفعيل اشتراك {result['activated']} لاعبًا (منهم {result['topped_up']} حصلوا على تعبئة رصيد "
+          f"إلى 8 حصص) — إجمالي مسجّل كمدفوع: {result['total_revenue']:,.0f} ر.س")
+    return redirect("/players")
