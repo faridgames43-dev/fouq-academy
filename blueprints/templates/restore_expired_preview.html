@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}إرجاع حصص للاعبين منتهية الصلاحية{% endblock %}
+{% block page_title %}إرجاع حصص لمن انتهت صلاحية حصصهم{% endblock %}
+{% block content %}
+
+<div class="section card" style="border-right:4px solid var(--gold);">
+  <p><b>⚠️ راجع القائمة كاملًا قبل التأكيد. لا يتم حفظ أي شيء حتى تضغط "تأكيد الإرجاع".</b></p>
+  <p class="muted" style="font-size:13px;">
+    هذا الإجراء إضافي فقط: يمنح كل لاعب محدد أدناه <b>{{ qty }} حصة جديدة</b> بدون تاريخ انتهاء (تبقى في رصيده حتى تُستخدم فعليًا) —
+    ولا يخصم أو يعدّل رصيد أي لاعب آخر بأي شكل. الحصص لا تُخصم من أي شخص إلا عند تسجيل حضوره فعليًا.
+  </p>
+  <p class="muted" style="font-size:13px;">
+    القائمة تعرض كل لاعب لديه حصص منتهية الصلاحية حاليًا (فيها رصيد كان موجودًا وانتهى)، مرتبة من الأحدث انتهاءً.
+    اللاعبون الذين انتهت حصصهم خلال آخر {{ window_days }} يوم محددون تلقائيًا — راجع العدد وعدّل التحديد حسب الحاجة قبل التأكيد.
+  </p>
+</div>
+
+<div class="section grid grid-3">
+  <div class="card"><div class="card-title">إجمالي اللاعبين المرشحين</div><div style="font-size:24px;font-weight:800;">{{ plan|length }}</div></div>
+  <div class="card"><div class="card-title">محددون تلقائيًا (آخر {{ window_days }} يوم)</div><div style="font-size:24px;font-weight:800;color:#158a4d;">{{ preselected|length }}</div></div>
+  <div class="card"><div class="card-title">الحصص لكل لاعب محدد</div><div style="font-size:24px;font-weight:800;">+{{ qty }}</div></div>
+</div>
+
+<form method="post" action="/admin/restore-expired-sessions/confirm"
+      onsubmit="return confirm('تأكيد إرجاع ' + document.querySelectorAll('.restore-row:checked').length + ' حصتين لكل لاعب محدد؟ هذا يضيف رصيدًا جديدًا فقط ولا يخصم من أحد.');">
+  <div class="section flex gap-8 items-center flex-wrap">
+    <button class="btn btn-gold" type="submit">✅ تأكيد الإرجاع للمحددين</button>
+    <a class="btn btn-outline" href="/players">إلغاء والعودة لقائمة اللاعبين</a>
+    <button type="button" class="btn btn-sm btn-outline" id="select-all-restore">تحديد الكل</button>
+    <button type="button" class="btn btn-sm btn-outline" id="select-none-restore">إلغاء تحديد الكل</button>
+  </div>
+
+  <div class="section">
+    <div class="card-title" style="margin:0 0 8px;">اللاعبون المرشحون لإرجاع الحصص ({{ plan|length }})</div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          <th></th><th>اللاعب</th><th>الكود</th><th>النوع</th>
+          <th>آخر تاريخ انتهاء</th><th>منذ كم يوم</th><th>الحصص التي فُقدت</th>
+          <th>الرصيد الحالي</th><th>الرصيد بعد الإرجاع</th>
+        </tr></thead>
+        <tbody>
+          {% for r in plan %}
+          <tr>
+            <td><input type="checkbox" class="restore-row" name="player_ids" value="{{ r.player_id }}" {% if r.default_selected %}checked{% endif %}></td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.player_code }}</td>
+            <td>{% if r.player_type=='LEGACY' %}<span class="badge badge-purple">تواصل سابقًا</span>{% else %}<span class="badge badge-blue">فوق</span>{% endif %}</td>
+            <td>{{ r.last_expired_at }}</td>
+            <td>{% if r.days_ago is not none %}قبل {{ r.days_ago }} يوم{% else %}-{% endif %}</td>
+            <td>{{ r.lost_qty }}</td>
+            <td>{{ r.current_balance }}</td>
+            <td><b>{{ r.current_balance + qty }}</b> (إن تم تحديده)</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="muted">لا يوجد أي لاعب لديه حصص منتهية الصلاحية حاليًا</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const selAll = document.getElementById("select-all-restore");
+const selNone = document.getElementById("select-none-restore");
+if (selAll) selAll.addEventListener("click", () => document.querySelectorAll(".restore-row").forEach(cb => cb.checked = true));
+if (selNone) selNone.addEventListener("click", () => document.querySelectorAll(".restore-row").forEach(cb => cb.checked = false));
+</script>
+{% endblock %}
