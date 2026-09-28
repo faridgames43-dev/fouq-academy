@@ -7,6 +7,7 @@ from business import entitlements as ent
 from business import legacy as leg
 from business import achievements as ach
 from business import bulk_activation as bact
+from business import restore_expired_sessions as rest
 
 bp = Blueprint("subscriptions_bp", __name__)
 
@@ -185,4 +186,43 @@ def bulk_activate_confirm():
     conn.close()
     flash(f"✅ تم تفعيل اشتراك {result['activated']} لاعبًا (منهم {result['topped_up']} حصلوا على تعبئة رصيد "
           f"إلى 8 حصص) — إجمالي مسجّل كمدفوع: {result['total_revenue']:,.0f} ر.س")
+    return redirect("/players")
+
+
+@bp.route("/admin/restore-expired-sessions", methods=["GET"])
+@roles_required("SUPER_ADMIN", "PROJECT_MANAGER")
+def restore_expired_preview():
+    """Read-only preview of players whose session-entitlement batches have
+    expired — nothing is written until the admin reviews the exact list
+    and confirms. Purely additive: only grants new open-ended sessions,
+    never touches or removes any existing balance."""
+    conn = get_conn()
+    plan = rest.compute_plan(conn)
+    conn.close()
+    preselected = [r["player_id"] for r in plan if r["default_selected"]]
+    return render_template("restore_expired_preview.html", plan=plan, preselected=preselected,
+                            qty=rest.RESTORE_QTY_DEFAULT, window_days=rest.RECENT_WINDOW_DAYS)
+
+
+@bp.route("/admin/restore-expired-sessions/confirm", methods=["POST"])
+@roles_required("SUPER_ADMIN", "PROJECT_MANAGER")
+def restore_expired_confirm():
+    """Applies the restore only to player_ids that were actually posted
+    from the form AND are still present in a freshly-recomputed candidate
+    list (never trusts the browser alone), so nothing can slip in between
+    the human reviewing the preview and clicking confirm."""
+    conn = get_conn()
+    plan = rest.compute_plan(conn)
+    valid_ids = {r["player_id"] for r in plan}
+    posted_ids = request.form.getlist("player_ids", type=int)
+    selected_ids = [pid for pid in posted_ids if pid in valid_ids]
+    if not selected_ids:
+        conn.close()
+        flash("لم يتم تحديد أي لاعب — لم يتم تنفيذ أي تغيير.")
+        return redirect("/admin/restore-expired-sessions")
+    result = rest.execute_plan(conn, selected_ids, g.user["id"], qty=rest.RESTORE_QTY_DEFAULT)
+    conn.commit()
+    conn.close()
+    flash(f"✅ تم إرجاع {result['qty_each']} حصة لكل لاعب من {result['restored']} لاعبًا — "
+          f"بدون تاريخ انتهاء، ولم يُخصم أي رصيد من أي شخص آخر.")
     return redirect("/players")
