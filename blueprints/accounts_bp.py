@@ -250,6 +250,9 @@ def _diagnose_players(conn, pw, code=None):
         sql += " WHERE UPPER(p.player_code)=UPPER(?)"
         params = (code.strip(),)
     rows = []
+    cache = {}   # التحقق من كلمة المرور (scrypt) بطيء: نتحقق مرة واحدة لكل بصمة مختلفة فقط
+    import time
+    t0 = time.time()
     for r in q(conn, sql + " ORDER BY p.first_name, p.last_name", params):
         if not r["user_id"]:
             reason = "لا يوجد حساب دخول"
@@ -259,10 +262,19 @@ def _diagnose_players(conn, pw, code=None):
             reason = f"نوع الحساب غير لاعب ({r['role']})"
         elif not r["active"]:
             reason = "الحساب معطّل"
-        elif not check_password_hash(r["password_hash"], pw):
-            reason = "كلمة المرور مختلفة (غُيّرت أو لم تُطبَّق)"
         else:
-            reason = None
+            h = r["password_hash"]
+            if h not in cache:
+                if code or (r["must_reset_password"] and time.time() - t0 < 15):
+                    cache[h] = check_password_hash(h, pw)
+                else:
+                    cache[h] = None   # لم يُفحص: غيّر اللاعب كلمة مروره بنفسه أو انتهت مهلة الفحص
+            if cache[h] is None:
+                reason = None
+            elif not cache[h]:
+                reason = "كلمة المرور مختلفة (لم تُطبَّق الكلمة الموحدة عليه)"
+            else:
+                reason = None
         rows.append({**{k: r[k] for k in ("id", "first_name", "last_name", "player_code", "user_id")}, "reason": reason,
                      "must_reset": r["must_reset_password"]})
     return rows
