@@ -35,18 +35,18 @@ def coach_home():
     coach = q1(conn, "SELECT * FROM coaches WHERE user_id=?", (g.user["id"],))
     today_sessions = q(conn, """SELECT ts.*, g.name as group_name FROM training_sessions ts
                                 JOIN groups_ g ON g.id=ts.group_id
-                                WHERE ts.coach_id=? AND ts.session_date >= date('now') ORDER BY ts.session_date, ts.start_time LIMIT 5""",
+                                WHERE ts.coach_id=? AND ts.session_date >= date('now','+3 hours') ORDER BY ts.session_date, ts.start_time LIMIT 5""",
                         (coach["id"] if coach else -1,))
     groups = q(conn, "SELECT * FROM groups_ WHERE coach_id=?", (coach["id"] if coach else -1,))
     players_count = q1(conn, "SELECT COUNT(*) c FROM players WHERE coach_id=?", (coach["id"] if coach else -1,))["c"]
     missing_assessments = q1(conn, """SELECT COUNT(*) c FROM players p WHERE p.coach_id=?
-        AND NOT EXISTS (SELECT 1 FROM assessments a WHERE a.player_id=p.id AND a.assessment_date >= date('now','-60 day'))""",
+        AND NOT EXISTS (SELECT 1 FROM assessments a WHERE a.player_id=p.id AND a.assessment_date >= date('now','+3 hours','-60 day'))""",
                               (coach["id"] if coach else -1,))["c"]
     need_followup = q(conn, """SELECT p.id, p.first_name, p.last_name FROM players p WHERE p.coach_id=? AND p.id IN (
         SELECT player_id FROM attendance WHERE status='ABSENT' AND checked_at >= datetime('now','-14 day')
         GROUP BY player_id HAVING COUNT(*) >= 3)""", (coach["id"] if coach else -1,))
     unfinished = q(conn, """SELECT ts.*, g.name as group_name FROM training_sessions ts JOIN groups_ g ON g.id=ts.group_id
-                            WHERE ts.coach_id=? AND ts.status IN ('SCHEDULED','STARTED') AND ts.session_date <= date('now')""",
+                            WHERE ts.coach_id=? AND ts.status IN ('SCHEDULED','STARTED') AND ts.session_date <= date('now','+3 hours')""",
                    (coach["id"] if coach else -1,))
     conn.close()
     return render_template("dashboard_coach.html", coach=coach, today_sessions=today_sessions, groups=groups,

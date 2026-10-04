@@ -10,7 +10,7 @@ from business.accounts import create_user_account, find_parent_by_phone, Account
 from business.audit import log as audit_log
 from business import reset_demo
 from business import bulk_import
-from business.pdf_export import build_credentials_pdf, build_login_guide_pdf, LOGIN_GUIDE_STEPS, build_full_roster_pdf
+from business.pdf_export import build_credentials_pdf, build_login_guide_pdf, LOGIN_GUIDE_STEPS, build_full_roster_pdf, build_credentials_table_pdf
 import json
 import io
 import os
@@ -109,43 +109,102 @@ def login_guide_pdf():
     return send_file(buf, as_attachment=True, download_name="دليل_تسجيل_الدخول.pdf", mimetype="application/pdf")
 
 
+ROSTER_TYPE_FILTERS = {"fouq": "AND p.player_type = 'FOUQ'", "legacy": "AND p.player_type = 'LEGACY'", "all": ""}
+ROSTER_TYPE_LABELS = {"fouq": "لاعبو أكاديمية فوق فقط", "legacy": "لاعبو نادي تواصل فقط", "all": "جميع اللاعبين"}
+ROSTER_TYPE_FILENAMES = {"fouq": "بيانات_لاعبي_أكاديمية_فوق.pdf", "legacy": "بيانات_لاعبي_نادي_تواصل.pdf",
+                         "all": "بيانات_جميع_اللاعبين.pdf"}
+
+
+def _roster_type():
+    t = (request.args.get("type") or "fouq").lower()
+    return t if t in ROSTER_TYPE_FILTERS else "fouq"
+
+
 @bp.route("/accounts/export-fouq-roster", methods=["GET"])
 @permission_required("manage_players")
 def export_fouq_roster_preview():
-    """Preview before download: shows exactly who will be in the export
-    (count + alphabetical list) so an admin can verify it — FOUQ players
-    only (player_type='FOUQ'); LEGACY (نادي تواصل الرياضي السابق) players
-    are excluded since they don't belong to أكاديمية فوق. Temporary
-    passwords are never shown here or in the PDF — they're one-way hashed
-    in the database and cannot be recovered once set."""
+    """معاينة قبل التحميل مع اختيار نوع التصدير: الكل / أكاديمية فوق فقط /
+    نادي تواصل فقط. كلمات المرور لا تظهر هنا ولا في الملف الأساسي لأنها
+    مخزّنة بتشفير أحادي الاتجاه ولا يمكن استرجاعها."""
+    rtype = _roster_type()
     conn = get_conn()
-    players = q(conn, """
-        SELECT p.id, p.first_name, p.last_name, p.player_code AS code, p.status,
+    players = q(conn, f"""
+        SELECT p.id, p.first_name, p.last_name, p.player_code AS code, p.status, p.player_type,
                b.name AS branch_name, c.name AS category_name
         FROM players p
         LEFT JOIN branches b ON b.id = p.branch_id
         LEFT JOIN categories c ON c.id = p.category_id
-        WHERE p.player_type = 'FOUQ'
+        WHERE 1=1 {ROSTER_TYPE_FILTERS[rtype]}
         ORDER BY p.first_name, p.last_name
     """)
+    counts = {
+        "all": q1(conn, "SELECT COUNT(*) c FROM players")["c"],
+        "fouq": q1(conn, "SELECT COUNT(*) c FROM players WHERE player_type='FOUQ'")["c"],
+        "legacy": q1(conn, "SELECT COUNT(*) c FROM players WHERE player_type='LEGACY'")["c"],
+    }
     conn.close()
-    return render_template("export_fouq_roster_preview.html", players=players, count=len(players))
+    return render_template("export_fouq_roster_preview.html", players=players, count=len(players),
+                            rtype=rtype, type_labels=ROSTER_TYPE_LABELS, counts=counts)
 
 
 @bp.route("/accounts/export-fouq-roster.pdf", methods=["GET"])
 @permission_required("manage_players")
 def export_fouq_roster_pdf():
+    rtype = _roster_type()
     conn = get_conn()
-    players = q(conn, """
+    players = q(conn, f"""
         SELECT p.first_name, p.last_name, p.player_code AS code
         FROM players p
-        WHERE p.player_type = 'FOUQ'
+        WHERE 1=1 {ROSTER_TYPE_FILTERS[rtype]}
         ORDER BY p.first_name, p.last_name
     """)
     conn.close()
-    buf = build_full_roster_pdf([dict(p) for p in players])
-    return send_file(buf, as_attachment=True, download_name="بيانات_لاعبي_أكاديمية_فوق.pdf",
+    buf = build_full_roster_pdf([dict(p) for p in players], roster_type=rtype)
+    return send_file(buf, as_attachment=True, download_name=ROSTER_TYPE_FILENAMES[rtype],
                       mimetype="application/pdf")
+
+
+@bp.route("/accounts/credentials-sheet", methods=["GET"])
+@permission_required("manage_players")
+def credentials_sheet_form():
+    """ملف PDF بأسماء اللاعبين (أبجديًا) + اسم المستخدم + كلمة المرور الموحدة."""
+    conn = get_conn()
+    counts = {
+        "all": q1(conn, "SELECT COUNT(*) c FROM players")["c"],
+        "FOUQ": q1(conn, "SELECT COUNT(*) c FROM players WHERE player_type='FOUQ'")["c"],
+        "LEGACY": q1(conn, "SELECT COUNT(*) c FROM players WHERE player_type='LEGACY'")["c"],
+    }
+    categories = q(conn, "SELECT id, name FROM categories ORDER BY name")
+    conn.close()
+    return render_template("credentials_sheet.html", counts=counts, categories=categories,
+                            suggested_password=generate_password())
+
+
+@bp.route("/accounts/credentials-sheet.pdf", methods=["POST"])
+@permission_required("manage_players")
+def credentials_sheet_pdf():
+    # POST (لا GET) حتى لا تظهر كلمة المرور في رابط الصفحة أو سجل المتصفح
+    pw = (request.form.get("unified_password") or "").strip()
+    scope = request.form.get("scope", "all")
+    category_id = request.form.get("category_id") or None
+    style = request.form.get("style", "table")
+    if len(pw) < 4:
+        flash("اكتب كلمة المرور الموحدة (4 أحرف على الأقل)")
+        return redirect("/accounts/credentials-sheet")
+    sql = "SELECT first_name, last_name, player_code AS code FROM players WHERE 1=1"
+    params = []
+    if scope in ("FOUQ", "LEGACY"):
+        sql += " AND player_type=?"; params.append(scope)
+    if category_id:
+        sql += " AND category_id=?"; params.append(category_id)
+    conn = get_conn()
+    players = [dict(r) for r in q(conn, sql + " ORDER BY first_name, last_name", tuple(params))]
+    conn.close()
+    if not players:
+        flash("لا يوجد لاعبون مطابقون")
+        return redirect("/accounts/credentials-sheet")
+    buf = build_credentials_table_pdf(players, pw) if style == "table" else build_credentials_pdf(players, pw)
+    return send_file(buf, as_attachment=True, download_name="بيانات_دخول_اللاعبين.pdf", mimetype="application/pdf")
 
 
 @bp.route("/accounts/import/template.xlsx", methods=["GET"])

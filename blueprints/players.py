@@ -287,6 +287,8 @@ def profile(player_id):
     redemptions = player_redemptions(conn, player_id)
     risk = compute_risk(conn, player_id)
     notes = q(conn, "SELECT * FROM renewal_notes WHERE player_id=? ORDER BY id DESC LIMIT 10", (player_id,))
+    session_notes = q(conn, """SELECT pn.*, u.name AS author FROM player_notes pn LEFT JOIN users u ON u.id=pn.created_by
+                               WHERE pn.player_id=? ORDER BY pn.id DESC LIMIT 15""", (player_id,))
     parent = q1(conn, """SELECT pr.* FROM parents pr JOIN parent_players pp ON pp.parent_id=pr.id
                          WHERE pp.player_id=?""", (player_id,))
     onboarding = {}
@@ -303,7 +305,7 @@ def profile(player_id):
                             subs_history=subs_history, ledger=ledger, attendance_hist=attendance_hist,
                             attendance_pct=attendance_pct, dev_timeline=dev_timeline, level=level,
                             readiness=readiness, pts_balance=pts_balance, pts_hist=pts_hist,
-                            achievements=achievements, redemptions=redemptions, risk=risk, notes=notes,
+                            achievements=achievements, redemptions=redemptions, risk=risk, notes=notes, session_notes=session_notes,
                             parent=parent, child_label=child_label, onboarding=onboarding, onboarding_pct=onboarding_pct)
 
 
@@ -415,6 +417,124 @@ def add_note(player_id):
     conn.commit()
     conn.close()
     flash("تم حفظ الملاحظة")
+    return redirect(f"/players/{player_id}")
+
+
+def _card_players(conn, group_id=None, category_id=None, ids=None):
+    sql = """SELECT p.id, p.first_name, p.last_name, p.player_code AS code, p.photo_url,
+                    c.name AS category_name, gr.name AS group_name
+             FROM players p LEFT JOIN categories c ON c.id=p.category_id
+             LEFT JOIN groups_ gr ON gr.id=p.group_id WHERE 1=1"""
+    params = []
+    if group_id:
+        sql += " AND p.group_id=?"; params.append(group_id)
+    if category_id:
+        sql += " AND p.category_id=?"; params.append(category_id)
+    if ids is not None:
+        if not ids:
+            return []
+        sql += " AND p.id IN (%s)" % ",".join("?" * len(ids)); params += ids
+    sql, params = _scoped_player_query(sql, params, conn)
+    return q(conn, sql + " ORDER BY p.first_name, p.last_name", tuple(params))
+
+
+@bp.route("/players/cards")
+@permission_required("manage_players")
+def cards_page():
+    """طباعة بطاقات اللاعبين: الكل / عدد محدد / لاعبون محددون."""
+    conn = get_conn()
+    group_id = request.args.get("group_id") or None
+    category_id = request.args.get("category_id") or None
+    players = _card_players(conn, group_id, category_id)
+    groups = q(conn, "SELECT * FROM groups_ ORDER BY name")
+    categories = q(conn, "SELECT * FROM categories ORDER BY name")
+    conn.close()
+    return render_template("player_cards.html", players=players, groups=groups, categories=categories,
+                            group_id=group_id or "", category_id=category_id or "")
+
+
+@bp.route("/players/cards.pdf")
+@permission_required("manage_players")
+def cards_pdf():
+    from flask import send_file
+    from business.pdf_export import build_player_cards_pdf
+    conn = get_conn()
+    mode = request.args.get("mode", "all")
+    group_id = request.args.get("group_id") or None
+    category_id = request.args.get("category_id") or None
+    if mode == "selected":
+        ids = [int(x) for x in request.args.getlist("ids") if str(x).isdigit()]
+        players = _card_players(conn, group_id, category_id, ids)
+    else:
+        players = _card_players(conn, group_id, category_id)
+        if mode == "count":
+            try:
+                n = max(1, int(request.args.get("n", 8)))
+            except ValueError:
+                n = 8
+            players = players[:n]
+    conn.close()
+    if not players:
+        flash("لا يوجد لاعبون مطابقون للطباعة")
+        return redirect("/players/cards")
+    buf = build_player_cards_pdf([dict(p) for p in players])
+    return send_file(buf, mimetype="application/pdf", download_name="بطاقات_اللاعبين.pdf", as_attachment=False)
+
+
+@bp.route("/players/<int:player_id>/card.pdf")
+@permission_required("manage_players")
+def card_pdf(player_id):
+    from flask import send_file
+    from business.pdf_export import build_player_cards_pdf
+    conn = get_conn()
+    players = _card_players(conn, ids=[player_id])
+    conn.close()
+    if not players:
+        abort(404)
+    buf = build_player_cards_pdf([dict(players[0])], single=True)
+    return send_file(buf, mimetype="application/pdf", download_name=f"بطاقة_{players[0]['code']}.pdf", as_attachment=False)
+
+
+CELEB_DIR = os.path.join(DATA_DIR, "uploads", "celebrations")
+CELEB_EXTS = (".mp4", ".webm", ".mov")
+
+
+@bp.route("/uploads/celebrations/<path:filename>")
+@login_required
+def celebration_upload(filename):
+    from flask import send_from_directory
+    return send_from_directory(CELEB_DIR, filename)
+
+
+@bp.route("/players/<int:player_id>/celebration", methods=["POST"])
+@permission_required("manage_players")
+def update_celebration(player_id):
+    """مقطع احتفالية خاص بكل لاعب يظهر على شاشة التحضير TV عند وصوله."""
+    conn = get_conn()
+    player = q1(conn, "SELECT player_code FROM players WHERE id=?", (player_id,))
+    if not player:
+        conn.close()
+        abort(404)
+    if request.form.get("remove") == "1":
+        ex(conn, "UPDATE players SET celebration_url=NULL WHERE id=?", (player_id,))
+        audit_log(conn, g.user["id"], "REMOVE_PLAYER_CELEBRATION", "players", player_id)
+        conn.commit(); conn.close()
+        flash("تم حذف مقطع الاحتفالية")
+        return redirect(f"/players/{player_id}")
+    f = request.files.get("celebration")
+    ext = os.path.splitext(f.filename or "")[1].lower() if f else ""
+    if not f or ext not in CELEB_EXTS:
+        conn.close()
+        flash("اختر مقطع فيديو بصيغة mp4 أو webm أو mov (حتى 30 ميجابايت)")
+        return redirect(f"/players/{player_id}")
+    os.makedirs(CELEB_DIR, exist_ok=True)
+    fname = f"{player['player_code']}-{uuid.uuid4().hex[:8]}{ext}"
+    f.save(os.path.join(CELEB_DIR, fname))
+    url = f"/uploads/celebrations/{fname}"
+    ex(conn, "UPDATE players SET celebration_url=? WHERE id=?", (url, player_id))
+    audit_log(conn, g.user["id"], "UPDATE_PLAYER_CELEBRATION", "players", player_id, after={"celebration_url": url})
+    conn.commit(); conn.close()
+    flash("تم حفظ مقطع الاحتفالية — سيظهر على شاشة التحضير عند وصول اللاعب 🎉")
     return redirect(f"/players/{player_id}")
 
 

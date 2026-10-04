@@ -19,7 +19,7 @@ def index():
 
     declining = q(conn, f"""SELECT p.*,
         (SELECT ROUND(100.0*SUM(CASE WHEN a2.status IN ('PRESENT','LATE') THEN 1 ELSE 0 END)/COUNT(*),1) FROM attendance a2
-           JOIN training_sessions t2 ON t2.id=a2.training_session_id WHERE a2.player_id=p.id AND t2.session_date>=date('now','-14 day')) as recent_rate
+           JOIN training_sessions t2 ON t2.id=a2.training_session_id WHERE a2.player_id=p.id AND t2.session_date>=date('now','+3 hours','-14 day')) as recent_rate
         FROM players p WHERE p.status='ACTIVE' {bc}""", params)
     declining = [d for d in declining if d["recent_rate"] is not None and d["recent_rate"] < 50]
 

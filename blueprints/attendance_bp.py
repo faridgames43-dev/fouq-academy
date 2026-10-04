@@ -5,6 +5,7 @@ from business.rbac import login_required, permission_required, coach_group_ids, 
 from business import attendance as att
 from business import achievements as ach
 from business import challenges as chal
+from business import tv_checkin as tv
 from business.audit import log as audit_log
 from business.points import get_balance as points_balance, ADD_REASONS, SUBTRACT_REASONS, PointsError
 from business.points import award_points
@@ -42,6 +43,23 @@ def today():
     return render_template("attendance_today.html", sessions=sessions, sel_date=sel_date)
 
 
+@bp.route("/attendance/no-balance")
+@permission_required("manage_compensation")
+def no_balance_report():
+    """لاعبون حضروا بدون رصيد حصص مسجّل — للمراجعة وإضافة/تجديد الرصيد."""
+    conn = get_conn()
+    rows = q(conn, """SELECT p.id, p.first_name, p.last_name, p.player_code, COUNT(*) AS cnt, MAX(ts.session_date) AS last_date
+                      FROM attendance a JOIN players p ON p.id=a.player_id
+                      JOIN training_sessions ts ON ts.id=a.training_session_id
+                      WHERE a.no_balance=1 AND a.status IN ('PRESENT','LATE')
+                      GROUP BY p.id ORDER BY cnt DESC, p.first_name""")
+    from business.entitlements import get_balances
+    for r in rows:
+        r["balance"] = get_balances(conn, r["id"])["TOTAL"]
+    conn.close()
+    return render_template("attendance_no_balance.html", rows=rows)
+
+
 @bp.route("/attendance/session/<int:session_id>")
 @login_required
 def session_detail(session_id):
@@ -56,6 +74,7 @@ def session_detail(session_id):
         a = existing.get(p["id"])
         p["attendance_status"] = a["status"] if a else None
         p["attendance_id"] = a["id"] if a else None
+        p["no_balance"] = bool(a and a.get("no_balance"))
     conn.close()
     can_override = g.user["role"] in ("SUPER_ADMIN", "PROJECT_MANAGER", "BRANCH_MANAGER", "SUPERVISOR")
     return render_template("attendance_session.html", ts=ts, roster=roster, can_override=can_override)
@@ -113,6 +132,129 @@ def tv_screen(session_id):
     if not ts:
         abort(404)
     return render_template("attendance_tv.html", ts=ts)
+
+
+@bp.route("/attendance/session/<int:session_id>/tv/state")
+@permission_required("take_attendance")
+def tv_state(session_id):
+    conn = get_conn()
+    state = tv.roster_state(conn, session_id)
+    conn.commit()  # current_level() may lazily create the first level row
+    conn.close()
+    if not state:
+        return jsonify({"ok": False, "message": "الحصة غير موجودة"}), 404
+    return jsonify(state)
+
+
+@bp.route("/attendance/session/<int:session_id>/tv/start", methods=["POST"])
+@permission_required("take_attendance")
+def tv_start(session_id):
+    conn = get_conn()
+    try:
+        tv.start_checkin(conn, session_id, g.user["id"])
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+    except att.AttendanceError as e:
+        conn.rollback(); conn.close()
+        return jsonify({"ok": False, "message": str(e)}), 400
+
+
+@bp.route("/attendance/session/<int:session_id>/tv/close", methods=["POST"])
+@permission_required("take_attendance")
+def tv_close(session_id):
+    conn = get_conn()
+    try:
+        result = tv.close_checkin(conn, session_id, g.user["id"], mark_absent=True)
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, **result})
+    except att.AttendanceError as e:
+        conn.rollback(); conn.close()
+        return jsonify({"ok": False, "message": str(e)}), 400
+
+
+@bp.route("/attendance/session/<int:session_id>/tv/scan", methods=["POST"])
+@permission_required("take_attendance")
+def tv_scan(session_id):
+    conn = get_conn()
+    data = request.get_json(force=True)
+    try:
+        result = tv.checkin_player(conn, session_id, g.user["id"], code=data.get("code"),
+                                    player_id=data.get("player_id"))
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, **result})
+    except att.AttendanceError as e:
+        conn.rollback(); conn.close()
+        return jsonify({"ok": False, "message": str(e)}), 400
+
+
+QUICK_ADD_DEFAULTS = {"الحضور المبكر": 10, "الانضباط": 10, "الروح الرياضية": 10, "مساعدة زميل": 10,
+                      "الفوز بتحدٍ": 15, "تطور ملحوظ": 15, "لاعب الحصة": 10, "الالتزام باللباس": 5}
+QUICK_SUB_DEFAULTS = {"التأخر": 5, "سوء السلوك": 10, "السب": 15, "عدم الالتزام": 10,
+                      "إفساد التدريب": 10, "مخالفة تعليمات المدرب": 10}
+
+
+@bp.route("/attendance/session/<int:session_id>/quick")
+@permission_required("take_attendance")
+def quick_entry(session_id):
+    """رصد سريع: اختر لاعبًا (أو عدة لاعبين) ← اضغط سببًا جاهزًا ← تُرصد النقاط فورًا،
+    مع خانة ملاحظة اختيارية. كله في شاشة واحدة بدون تنقل بين صفحات."""
+    conn = get_conn()
+    ts = q1(conn, "SELECT ts.*, g.name as group_name FROM training_sessions ts JOIN groups_ g ON g.id=ts.group_id WHERE ts.id=?",
+            (session_id,))
+    if not ts:
+        conn.close()
+        abort(404)
+    roster = q(conn, "SELECT id, first_name, last_name, photo_url, player_code FROM players WHERE group_id=? ORDER BY first_name, last_name",
+               (ts["group_id"],))
+    for p in roster:
+        p["points"] = points_balance(conn, p["id"])
+    conn.commit()
+    conn.close()
+    return render_template("attendance_quick.html", ts=ts, roster=roster,
+                            add_reasons=[(r, QUICK_ADD_DEFAULTS.get(r, 10)) for r, _ in ADD_REASONS],
+                            sub_reasons=[(r, QUICK_SUB_DEFAULTS.get(r, 5)) for r, _ in SUBTRACT_REASONS])
+
+
+@bp.route("/attendance/session/<int:session_id>/quick/save", methods=["POST"])
+@permission_required("take_attendance")
+def quick_save(session_id):
+    from blueprints.points_bp import _apply_points
+    conn = get_conn()
+    data = request.get_json(force=True)
+    ids = [int(x) for x in data.get("player_ids", [])]
+    reason = (data.get("reason") or "").strip()
+    note = (data.get("note") or "").strip()
+    try:
+        amount = int(data.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if not ids:
+        conn.close()
+        return jsonify({"ok": False, "message": "حدد لاعبًا واحدًا على الأقل"}), 400
+    if not amount and not note:
+        conn.close()
+        return jsonify({"ok": False, "message": "اختر سببًا للنقاط أو اكتب ملاحظة"}), 400
+    cat_map = dict(ADD_REASONS); cat_map.update(dict(SUBTRACT_REASONS))
+    results = []
+    for pid in ids:
+        entry = {"player_id": pid, "ok": True}
+        try:
+            if amount:
+                _apply_points(conn, pid, amount, reason or "رصد سريع", cat_map.get(reason, "ADMIN"), note or None)
+            if note:
+                ex(conn, "INSERT INTO player_notes(player_id, training_session_id, note, created_by) VALUES (?,?,?,?)",
+                   (pid, session_id, note, g.user["id"]))
+                audit_log(conn, g.user["id"], "PLAYER_NOTE", "players", pid, after={"note": note})
+            entry["points"] = points_balance(conn, pid)
+        except PointsError as e:
+            entry = {"player_id": pid, "ok": False, "message": str(e)}
+        results.append(entry)
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "saved": sum(1 for r in results if r["ok"]), "results": results})
 
 
 @bp.route("/attendance/session/<int:session_id>/mark_all_present", methods=["POST"])
@@ -227,7 +369,7 @@ def reopen_session(session_id):
     if not ts:
         conn.close()
         abort(404)
-    ex(conn, "UPDATE training_sessions SET status='SCHEDULED' WHERE id=?", (session_id,))
+    ex(conn, "UPDATE training_sessions SET status='SCHEDULED', checkin_closed_at=NULL WHERE id=?", (session_id,))
     audit_log(conn, g.user["id"], "REOPEN_SESSION", "training_sessions", session_id,
               before={"status": ts["status"]}, after={"status": "SCHEDULED"})
     conn.commit()

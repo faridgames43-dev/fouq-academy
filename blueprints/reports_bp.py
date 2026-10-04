@@ -1,7 +1,9 @@
-from flask import Blueprint, render_template, request, Response, g, abort, send_file
+from flask import Blueprint, render_template, request, Response, g, abort, send_file, redirect, flash
 from datetime import date, timedelta
 from db import get_conn, q, q1
-from business.rbac import permission_required, branch_scope, login_required, parent_player_ids
+from business.rbac import permission_required, branch_scope, login_required, parent_player_ids, roles_required
+from business.settings_lib import get_setting, set_setting
+from business.audit import log as audit_log
 from business import reports as rep
 from business.dashboard import kpis
 from business.pdf_export import build_generic_report_pdf, build_monthly_report_pdf, build_player_report_pdf
@@ -99,18 +101,57 @@ def print_view(report_type):
     return render_template("print_generic_report.html", rows=rows, title=title)
 
 
+def _with_actual_revenue(conn, data):
+    """يضيف الإيراد الفعلي المُدخل يدويًا (من منصة الدفع الخارجية) بجانب إيراد النظام."""
+    data = dict(data)
+    raw = get_setting(conn, "actual_revenue_amount", "") or ""
+    try:
+        data["actual_revenue_amount"] = float(raw) if raw != "" else None
+    except ValueError:
+        data["actual_revenue_amount"] = None
+    data["actual_revenue_period"] = get_setting(conn, "actual_revenue_period", "") or ""
+    data["actual_revenue_updated_at"] = get_setting(conn, "actual_revenue_updated_at", "") or ""
+    return data
+
+
 @bp.route("/reports/monthly")
 @permission_required("view_reports")
 def monthly(fmt=None):
     conn = get_conn()
     branch_id = branch_scope(g.user)
     fmt = fmt or request.args.get("format")
-    data = kpis(conn, branch_id)
+    data = _with_actual_revenue(conn, kpis(conn, branch_id))
     conn.close()
     if fmt == "pdf":
         buf = build_monthly_report_pdf(data)
         return send_file(buf, as_attachment=False, download_name="monthly_report.pdf", mimetype="application/pdf")
-    return render_template("report_monthly.html", data=data, title="التقرير الشهري للإدارة")
+    return render_template("report_monthly.html", data=data, title="التقرير الشهري للإدارة",
+                            can_edit_revenue=g.user["role"] in ("SUPER_ADMIN", "PROJECT_MANAGER"))
+
+
+@bp.route("/reports/monthly/actual-revenue", methods=["POST"])
+@roles_required("SUPER_ADMIN", "PROJECT_MANAGER")
+def save_actual_revenue():
+    raw = (request.form.get("amount") or "").replace(",", "").strip()
+    period = (request.form.get("period") or "").strip()
+    try:
+        amount = float(raw)
+        if amount < 0:
+            raise ValueError
+    except ValueError:
+        flash("اكتب مبلغًا صحيحًا (رقم أكبر من أو يساوي صفر)")
+        return redirect("/reports/monthly")
+    from datetime import datetime
+    conn = get_conn()
+    set_setting(conn, "actual_revenue_amount", f"{amount:.2f}")
+    set_setting(conn, "actual_revenue_period", period)
+    set_setting(conn, "actual_revenue_updated_at", datetime.now().strftime("%Y-%m-%d %H:%M"))
+    audit_log(conn, g.user["id"], "SET_ACTUAL_REVENUE", "settings", None,
+              after={"amount": amount, "period": period}, reason="إدخال الإيراد الفعلي يدويًا من منصة الدفع")
+    conn.commit()
+    conn.close()
+    flash(f"تم حفظ الإيراد الفعلي: {amount:,.2f} ر.س" + (f" — {period}" if period else ""))
+    return redirect("/reports/monthly")
 
 
 @bp.route("/reports/monthly/print")
@@ -118,7 +159,7 @@ def monthly(fmt=None):
 def monthly_print():
     conn = get_conn()
     branch_id = branch_scope(g.user)
-    data = kpis(conn, branch_id)
+    data = _with_actual_revenue(conn, kpis(conn, branch_id))
     conn.close()
     return render_template("print_monthly_report.html", data=data)
 
