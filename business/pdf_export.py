@@ -348,10 +348,13 @@ def build_monthly_report_pdf(data):
         ("الحضور اليوم", data.get("attendance_today"), "الغياب اليوم", data.get("absence_today")),
         ("اشتراكات تنتهي قريبًا", data.get("expiring_soon"), "اشتراكات منتهية", data.get("expired")),
         ("حصص مستحقة قائمة", data.get("outstanding_compensation"), "تجديدات (30 يوم)", data.get("renewals_30d")),
-        ("إيراد الشهر الحالي", f"{data.get('revenue_month', 0):,.0f} ر.س", "معدل التجديد", f"{data.get('renewal_rate', 0)}٪"),
+        ("إيراد الشهر (سجلات النظام)", f"{data.get('revenue_month', 0):,.0f} ر.س", "معدل التجديد", f"{data.get('renewal_rate', 0)}٪"),
         ("معدل التسرب (Churn)", f"{data.get('churn', 0)}٪", "معدل الحضور العام", f"{data.get('avg_attendance', 0)}٪"),
         ("متوسط تطور اللاعبين", data.get("avg_development"), "طلبات جوائز معلّقة", data.get("rewards_pending")),
     ]
+    if data.get("actual_revenue_amount") is not None:
+        rows.insert(4, ("إجمالي الإيراد الفعلي (منصة الدفع)", f"{data['actual_revenue_amount']:,.2f} ر.س",
+                        "الفترة", data.get("actual_revenue_period") or "-"))
     y = _section_title(c, y, width, "المؤشرات الرئيسية")
     _kv_table(c, y, width, rows)
     _draw_footer(c, width)
@@ -644,7 +647,14 @@ def _draw_roster_block(c, x, y_top, w, h, regular, bold, seq_num, player_name, u
     # else: left intentionally empty (fillable by hand) — no placeholder text
 
 
-def build_full_roster_pdf(players):
+ROSTER_TITLES = {
+    "fouq": ("بيانات لاعبي أكاديمية فوق", "لاعبو أكاديمية فوق (FOUQ) حصرًا، بدون أي لاعب من جهة أخرى."),
+    "legacy": ("بيانات لاعبي نادي تواصل الرياضي", "لاعبو نادي تواصل الرياضي السابقون (LEGACY) فقط."),
+    "all": ("بيانات جميع اللاعبين", "جميع لاعبي الأكاديمية: أكاديمية فوق + لاعبو نادي تواصل السابقون."),
+}
+
+
+def build_full_roster_pdf(players, roster_type="fouq"):
     """Full-roster export: every player already in the system whose
     player_type is FOUQ (i.e. genuinely 'أكاديمية فوق' members — players
     with player_type LEGACY belong to the previous Tawasol club and are
@@ -663,11 +673,11 @@ def build_full_roster_pdf(players):
     regular, bold = ensure_fonts()
 
     def new_page(subtitle):
-        yy = _draw_letterhead(c, width, height, "بيانات لاعبي أكاديمية فوق", subtitle)
+        r_title, r_note = ROSTER_TITLES.get(roster_type, ROSTER_TITLES["fouq"])
+        yy = _draw_letterhead(c, width, height, r_title, subtitle)
         c.setFillColor(TEXT_DIM)
         c.setFont(regular, 9)
-        c.drawRightString(width - 40, yy, ar(
-            "قائمة موثّقة من نظام أكاديمية فوق فقط — لاعبو أكاديمية فوق (FOUQ) حصرًا، بدون أي لاعب من جهة أخرى."))
+        c.drawRightString(width - 40, yy, ar("قائمة موثّقة من نظام أكاديمية فوق — " + r_note))
         yy -= 22
         return yy
 
@@ -696,6 +706,342 @@ def build_full_roster_pdf(players):
 
     _draw_footer(c, width)
     c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def build_credentials_table_pdf(players, unified_password, title="بيانات دخول اللاعبين"):
+    """جدول مضغوط أبجدي: م | اسم اللاعب | اسم المستخدم | كلمة المرور الموحدة.
+    players: dict فيها first_name,last_name,code (اسم المستخدم)."""
+    ordered = sorted(players, key=lambda p: (p["first_name"] or "", p["last_name"] or ""))
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    regular, bold = ensure_fonts()
+    row_h = 21
+    left, right = 36, width - 36
+    # RTL: العمود الأول (م) يمين الصفحة
+    col_w = {"n": 34, "name": 205, "user": 130, "pw": right - left - 34 - 205 - 130}
+    x_n = right
+    x_name = x_n - col_w["n"]
+    x_user = x_name - col_w["name"]
+    x_pw = x_user - col_w["user"]
+
+    def header(sub):
+        yy = _draw_letterhead(c, width, height, title, sub)
+        c.setFillColor(TEXT_DIM)
+        c.setFont(regular, 9)
+        c.drawRightString(right, yy, ar(f"كلمة المرور الموحدة تعمل لمن لم يغيّرها بعد أول دخول · رابط الدخول: fouq-academy.onrender.com"))
+        yy -= 16
+        c.setFillColor(NAVY)
+        c.rect(left, yy - row_h + 6, right - left, row_h, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont(bold, 10.5)
+        c.drawRightString(x_n - 8, yy - 8, ar("م"))
+        c.drawRightString(x_name - 8, yy - 8, ar("اسم اللاعب"))
+        c.drawRightString(x_user - 8, yy - 8, ar("اسم المستخدم"))
+        c.drawRightString(x_pw - 8, yy - 8, ar("كلمة المرور الموحدة"))
+        return yy - row_h
+
+    y = header(f"{len(ordered)} لاعب — مرتبون أبجديًا")
+    for i, p in enumerate(ordered, start=1):
+        if y - row_h < 50:
+            _draw_footer(c, width)
+            c.showPage()
+            y = header("تابع")
+        if i % 2 == 0:
+            c.setFillColor(CARD_BG)
+            c.rect(left, y - row_h + 6, right - left, row_h, fill=1, stroke=0)
+        c.setStrokeColor(BORDER)
+        c.line(left, y - row_h + 6, right, y - row_h + 6)
+        c.setFillColor(TEXT_DIM)
+        c.setFont("Helvetica", 9.5)
+        c.drawRightString(x_n - 8, y - 8, str(i))
+        c.setFillColor(NAVY)
+        c.setFont(bold, 11)
+        c.drawRightString(x_name - 8, y - 8, ar(f"{p['first_name']} {p['last_name']}".strip()))
+        c.setFont("Helvetica-Bold", 10.5)
+        c.drawRightString(x_user - 8, y - 8, p.get("code") or "")
+        c.setFillColor(GOLD)
+        c.drawRightString(x_pw - 8, y - 8, unified_password)
+        y -= row_h
+    _draw_footer(c, width)
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
+# بطاقات اللاعبين (التحضير اليومي) — A4
+# ---------------------------------------------------------------------------
+_LOGO_WHITE_CACHE = {}
+
+
+def _get_white_logo():
+    if "reader" in _LOGO_WHITE_CACHE:
+        return _LOGO_WHITE_CACHE["reader"]
+    reader = None
+    try:
+        from PIL import Image
+        from reportlab.lib.utils import ImageReader
+        path = os.path.join(BASE_DIR, "static", "img", "logo_white.png")
+        if os.path.exists(path):
+            img = Image.open(path).convert("RGBA")
+            img.thumbnail((220, 220))
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            buf.seek(0)
+            reader = ImageReader(buf)
+    except Exception:
+        reader = None
+    _LOGO_WHITE_CACHE["reader"] = reader
+    return reader
+
+
+def _player_photo_reader(photo_url):
+    """يحوّل photo_url (/uploads/players/xxx.jpg) إلى صورة مربعة مقصوصة من القرص الدائم."""
+    if not photo_url:
+        return None
+    try:
+        from PIL import Image
+        from reportlab.lib.utils import ImageReader
+        from db import DATA_DIR
+        path = os.path.join(DATA_DIR, "uploads", "players", os.path.basename(photo_url))
+        if not os.path.exists(path):
+            return None
+        img = Image.open(path).convert("RGB")
+        w, h = img.size
+        side = min(w, h)
+        img = img.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
+        img = img.resize((360, 360))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=88)
+        buf.seek(0)
+        return ImageReader(buf)
+    except Exception:
+        return None
+
+
+def _barcode_reader(code):
+    try:
+        from PIL import Image
+        from reportlab.lib.utils import ImageReader
+        from business.barcode import render_code39
+        img = Image.open(io.BytesIO(render_code39(code, width=560, height=110))).convert("RGB")
+        img = img.crop((0, 0, 560, 82))  # بدون نص الصورة الصغير — نكتب الرقم بخط واضح داخل PDF
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return ImageReader(buf)
+    except Exception:
+        return None
+
+
+def _draw_silhouette(c, x, y, w, h):
+    """صورة بديلة أنيقة (رأس + كتفان) عندما لا توجد صورة للاعب."""
+    c.setFillColor(colors.HexColor("#1b3a63"))
+    c.rect(x, y, w, h, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor("#4f6f9c"))
+    c.circle(x + w / 2, y + h * 0.60, w * 0.19, fill=1, stroke=0)
+    p = c.beginPath()
+    p.moveTo(x + w * 0.14, y)
+    p.curveTo(x + w * 0.14, y + h * 0.30, x + w * 0.30, y + h * 0.36, x + w * 0.5, y + h * 0.36)
+    p.curveTo(x + w * 0.70, y + h * 0.36, x + w * 0.86, y + h * 0.30, x + w * 0.86, y)
+    p.close()
+    c.drawPath(p, fill=1, stroke=0)
+
+
+def _draw_player_card(c, x, y, w, h, regular, bold, player):
+    """بطاقة عضوية لاعب بهوية الأكاديمية (نسبة بطاقات الهوية): كحلي عميق مع
+    تفاصيل ذهبية، صورة اللاعب، الاسم، رقم اللاعب، والباركود على شريط أبيض
+    عالي التباين ليُقرأ بسهولة من قارئ التحضير. (x, y) الزاوية السفلية اليسرى."""
+    s = w / 255.0
+    m = 11 * s
+    R = 10 * s
+    c.saveState()
+
+    # --- الخلفية + القص بحواف دائرية ---
+    clip = c.beginPath()
+    clip.roundRect(x, y, w, h, R)
+    c.clipPath(clip, stroke=0, fill=0)
+    c.setFillColor(NAVY_DARK)
+    c.rect(x, y, w, h, fill=1, stroke=0)
+    # تدرج ناعم من الأعلى (أفتح) إلى الأسفل (أغمق)
+    steps = 28
+    c1, c2 = (0x0f, 0x2f, 0x52), (0x05, 0x13, 0x23)
+    for i in range(steps):
+        f = i / (steps - 1)
+        col = colors.Color(*[((c1[k] + (c2[k] - c1[k]) * f) / 255.0) for k in range(3)])
+        c.setFillColor(col)
+        c.rect(x, y + h - (i + 1) * h / steps - 0.4, w, h / steps + 0.8, fill=1, stroke=0)
+    # زخرفة: أسهم صاعدة (رمز «فوق») شفافة جدًا خلف المحتوى
+    c.setStrokeColor(colors.white)
+    c.setLineCap(1)
+    c.setLineJoin(1)
+    for i, (alpha, off) in enumerate(((0.07, 0), (0.05, 26), (0.035, 52))):
+        c.setStrokeAlpha(alpha)
+        c.setLineWidth(9 * s)
+        cx = x + w * 0.80
+        base = y + h * 0.18 + off * s * 0.7
+        c.lines([(cx - 46 * s, base, cx, base + 38 * s), (cx, base + 38 * s, cx + 46 * s, base)])
+    c.setStrokeAlpha(1)
+    # شريط ذهبي جانبي
+    c.setFillColor(GOLD)
+    c.rect(x, y, 4.5 * s, h, fill=1, stroke=0)
+
+    # --- الترويسة ---
+    logo = _get_white_logo()
+    lh = h * 0.17
+    if logo:
+        c.drawImage(logo, x + w - m - lh, y + h - m - lh + 1.5 * s, width=lh, height=lh,
+                    preserveAspectRatio=True, mask="auto")
+    tx = x + w - m - lh - 7 * s
+    c.setFillColor(colors.white)
+    c.setFont(bold, 14 * s)
+    c.drawRightString(tx, y + h - m - 6.5 * s, ar("أكاديمية فوق"))
+    t = c.beginText()
+    t.setFont("Helvetica-Bold", 6 * s)
+    t.setCharSpace(1.8 * s)
+    t.setFillColor(GOLD_LIGHT)
+    label = "FOUQ ACADEMY"
+    t.setTextOrigin(tx - pdfmetrics.stringWidth(label, "Helvetica-Bold", 6 * s) - 1.8 * s * len(label), y + h - m - 17 * s)
+    t.textOut(label)
+    t.setCharSpace(0)  # حالة Tc تبقى في الصفحة بعد النص — نصفّرها حتى لا تتباعد بقية الحروف
+    c.drawText(t)
+    c.setFillColor(GOLD_LIGHT)
+    c.setFont(bold, 8.5 * s)
+    c.drawString(x + m + 4 * s, y + h - m - 6 * s, ar("بطاقة لاعب"))
+    # خط فاصل ذهبي رفيع
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(0.7 * s)
+    c.line(x + m + 4 * s, y + h - m - lh - 5 * s, x + w - m, y + h - m - lh - 5 * s)
+
+    # --- الجسم: الصورة (يسار) + البيانات (يمين) ---
+    strip_h = h * 0.24
+    body_top = y + h - m - lh - 9 * s
+    body_bot = y + strip_h + 9 * s
+    bh = body_top - body_bot
+    pw = bh * 0.80
+    px = x + m + 4 * s
+    py = body_bot
+    photo = _player_photo_reader(player.get("photo_url"))
+    c.saveState()
+    fp = c.beginPath()
+    fp.roundRect(px, py, pw, bh, 6 * s)
+    c.clipPath(fp, stroke=0, fill=0)
+    if photo:
+        c.drawImage(photo, px, py, width=pw, height=bh, preserveAspectRatio=False)
+    else:
+        _draw_silhouette(c, px, py, pw, bh)
+    c.restoreState()
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1.3 * s)
+    c.roundRect(px, py, pw, bh, 6 * s, fill=0, stroke=1)
+
+    right = x + w - m
+    left_limit = px + pw + 10 * s
+    name = f"{player.get('first_name', '')} {player.get('last_name', '')}".strip()
+    fs = 14.5 * s
+    while fs > 8.5 * s and pdfmetrics.stringWidth(ar(name), bold, fs) > (right - left_limit):
+        fs -= 0.5 * s
+    c.setFillColor(colors.white)
+    c.setFont(bold, fs)
+    c.drawRightString(right, body_top - 12.5 * s, ar(name))
+
+    c.setFillColor(GOLD_LIGHT)
+    c.setFont(regular, 7.2 * s)
+    c.drawRightString(right, body_top - 23 * s, ar("رقم اللاعب"))
+    code = player.get("code") or ""
+    c.setFillColor(colors.white)
+    cfs = 13.5 * s
+    while cfs > 9 * s and pdfmetrics.stringWidth(code, "Helvetica-Bold", cfs) > (right - left_limit):
+        cfs -= 0.5 * s
+    c.setFont("Helvetica-Bold", cfs)
+    c.drawRightString(right, body_top - 24 * s - cfs - 1 * s, code)
+
+    # شارات الفئة والمجموعة
+    chip_y = body_bot
+    cx = right
+    for txt in (player.get("category_name"), player.get("group_name")):
+        if not txt:
+            continue
+        shaped = ar(txt)
+        c.setFont(regular, 7.2 * s)
+        tw = pdfmetrics.stringWidth(shaped, regular, 7.2 * s)
+        cw = tw + 10 * s
+        if cx - cw < left_limit:
+            break
+        c.setStrokeColor(GOLD)
+        c.setFillColor(colors.HexColor("#102f52"))
+        c.setLineWidth(0.6 * s)
+        c.roundRect(cx - cw, chip_y, cw, 10 * s, 5 * s, fill=1, stroke=1)
+        c.setFillColor(colors.white)
+        c.drawCentredString(cx - cw / 2, chip_y + 2.9 * s, shaped)
+        cx -= cw + 5 * s
+
+    # --- شريط الباركود الأبيض ---
+    sx, sy, sw = x + m + 4 * s, y + 7 * s, w - 2 * m - 4 * s
+    c.setFillColor(colors.white)
+    c.roundRect(sx, sy, sw, strip_h - 2 * s, 5 * s, fill=1, stroke=0)
+    bc = _barcode_reader(code)
+    bar_h = (strip_h - 2 * s) * 0.60
+    bar_w = sw * 0.80
+    if bc:
+        c.drawImage(bc, sx + (sw - bar_w) / 2, sy + (strip_h - 2 * s) - bar_h - 4 * s, width=bar_w, height=bar_h,
+                    preserveAspectRatio=False)
+    c.setFillColor(NAVY_DARK)
+    c.setFont("Helvetica-Bold", 7 * s)
+    c.drawCentredString(sx + sw / 2, sy + 3.6 * s, "  ".join(code))
+
+    c.restoreState()
+    # إطار خارجي رفيع
+    c.saveState()
+    c.setStrokeColor(colors.HexColor("#9aa7bd"))
+    c.setLineWidth(0.6)
+    c.roundRect(x, y, w, h, R, fill=0, stroke=1)
+    c.restoreState()
+
+
+def build_player_cards_pdf(players, single=False):
+    """بطاقات اللاعبين بمقاس A4: 10 بطاقات في الصفحة (2×5) للطباعة الجماعية،
+    أو بطاقة واحدة كبيرة وسط الصفحة للطباعة الفردية. مرتبة أبجديًا.
+    players: قائمة dict فيها first_name,last_name,code,photo_url,category_name,group_name."""
+    ordered = sorted(players, key=lambda p: (p.get("first_name") or "", p.get("last_name") or ""))
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    regular, bold = ensure_fonts()
+
+    if single or len(ordered) == 1:
+        for p in ordered:
+            w = 430
+            h = w * 150 / 255.0
+            x = (width - w) / 2
+            y = height - 90 - h
+            c.setFillColor(TEXT_DIM)
+            c.setFont(regular, 10)
+            c.drawCentredString(width / 2, height - 50, ar("بطاقة اللاعب — أكاديمية فوق · قصّ حسب الحاجة وتغليفها"))
+            _draw_player_card(c, x, y, w, h, regular, bold, p)
+            c.showPage()
+    else:
+        cols, rows = 2, 5
+        margin = 30
+        gap_x, gap_y = 14, 10
+        cw = (width - 2 * margin - gap_x) / cols
+        ch = (height - 2 * margin - gap_y * (rows - 1)) / rows
+        per_page = cols * rows
+        for i, p in enumerate(ordered):
+            idx = i % per_page
+            if i and idx == 0:
+                c.showPage()
+            r, col = divmod(idx, cols)
+            # RTL: العمود الأول يمين الصفحة
+            x = width - margin - cw - col * (cw + gap_x)
+            y = height - margin - ch - r * (ch + gap_y)
+            _draw_player_card(c, x, y, cw, ch, regular, bold, p)
+        c.showPage()
     c.save()
     buf.seek(0)
     return buf

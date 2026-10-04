@@ -169,7 +169,7 @@ def consume_one_session(conn, player_id, training_session_id=None, user_id=None,
         if allow_override:
             audit_log(conn, user_id, "ADMIN_OVERRIDE_ATTENDANCE", "players", player_id,
                       reason="تسجيل حضور بدون حصة متاحة عبر صلاحية إدارية")
-            return None, "ADMIN_OVERRIDE"
+            return None, "ADMIN_OVERRIDE", None
         raise EntitlementError("لا توجد حصص متاحة لهذا اللاعب (يحتاج تجديد)")
 
     batch = batches[0]

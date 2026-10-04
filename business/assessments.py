@@ -26,7 +26,7 @@ def create_assessment(conn, player_id, atype, coach_id, scores: dict, notes=None
     """scores: {metric_id: score}"""
     aid = ex(
         conn,
-        "INSERT INTO assessments(player_id, type, coach_id, notes, assessment_date) VALUES (?,?,?,?,COALESCE(?,date('now')))",
+        "INSERT INTO assessments(player_id, type, coach_id, notes, assessment_date) VALUES (?,?,?,?,COALESCE(?,date('now','+3 hours')))",
         (player_id, atype, coach_id, notes, assessment_date),
     )
     for metric_id, score in scores.items():

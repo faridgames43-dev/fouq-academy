@@ -32,6 +32,21 @@ def get_existing(conn, training_session_id, player_id):
               (training_session_id, player_id))
 
 
+def _resolve_override(conn, player_id, allow_override):
+    """سياسة الأكاديمية: التحضير لا يُرفض أبدًا بسبب رصيد الحصص (الإعداد
+    attendance_requires_balance=0 افتراضيًا). إذا لم يتوفر رصيد يُسجَّل الحضور
+    بدون خصم حصة ويُعلَّم "بدون رصيد" ليراجعه المسؤول — بدل رفض اللاعب
+    وهو واقف أمام المدرب. للرجوع للسلوك الصارم: اجعل الإعداد = 1."""
+    from business.settings_lib import get_setting
+    eligibility = get_attendance_eligibility(conn, player_id)
+    strict = get_setting(conn, "attendance_requires_balance", "0") == "1"
+    if eligibility["code"] == "NO_SESSIONS" and not allow_override:
+        if strict:
+            raise AttendanceError("لا يمكن تسجيل الحضور: " + eligibility["detail"])
+        return True, True   # (override, no_balance)
+    return allow_override or eligibility["code"] == "ADMIN_OVERRIDE", False
+
+
 def mark_attendance(conn, training_session_id, player_id, new_status, user_id, allow_override=False):
     """Create or update the attendance row for (session, player).
     Returns dict: {already: bool, status, remaining_total, message}"""
@@ -47,19 +62,18 @@ def mark_attendance(conn, training_session_id, player_id, new_status, user_id, a
         entitlement_id = None
         ledger_id = None
         etype = None
+        no_balance = False
         if new_status in DEDUCTING:
-            eligibility = get_attendance_eligibility(conn, player_id)
-            if eligibility["code"] == "NO_SESSIONS" and not allow_override:
-                raise AttendanceError("لا يمكن تسجيل الحضور: " + eligibility["detail"])
-            override = allow_override or eligibility["code"] == "ADMIN_OVERRIDE"
+            override, no_balance = _resolve_override(conn, player_id, allow_override)
             entitlement_id, etype, ledger_id = consume_one_session(
                 conn, player_id, training_session_id, user_id, allow_override=override
             )
+            no_balance = no_balance or entitlement_id is None
         att_id = ex(
             conn,
-            """INSERT INTO attendance(training_session_id, player_id, status, checked_by, entitlement_id, ledger_id)
-               VALUES (?,?,?,?,?,?)""",
-            (training_session_id, player_id, new_status, user_id, entitlement_id, ledger_id),
+            """INSERT INTO attendance(training_session_id, player_id, status, checked_by, entitlement_id, ledger_id, no_balance)
+               VALUES (?,?,?,?,?,?,?)""",
+            (training_session_id, player_id, new_status, user_id, entitlement_id, ledger_id, 1 if no_balance else 0),
         )
         audit_log(conn, user_id, "MARK_ATTENDANCE", "attendance", att_id,
                   after={"status": new_status, "player_id": player_id})
@@ -71,18 +85,18 @@ def mark_attendance(conn, training_session_id, player_id, new_status, user_id, a
 
         if old_deducts and not new_deducts:
             reverse_consumption(conn, entitlement_id, existing["ledger_id"], user_id, existing["id"])
-            ex(conn, "UPDATE attendance SET status=?, entitlement_id=NULL, ledger_id=NULL, checked_by=?, cancelled=0 WHERE id=?",
+            from business.points import reverse_attendance_points
+            reverse_attendance_points(conn, player_id, training_session_id, user_id)
+            ex(conn, "UPDATE attendance SET status=?, entitlement_id=NULL, ledger_id=NULL, checked_by=?, cancelled=0, no_balance=0 WHERE id=?",
                (new_status, user_id, existing["id"]))
         elif not old_deducts and new_deducts:
-            eligibility = get_attendance_eligibility(conn, player_id)
-            override = allow_override or eligibility["code"] == "ADMIN_OVERRIDE"
-            if eligibility["code"] == "NO_SESSIONS" and not override:
-                raise AttendanceError("لا يمكن تسجيل الحضور: " + eligibility["detail"])
+            override, no_balance = _resolve_override(conn, player_id, allow_override)
             new_ent, new_etype, new_ledger = consume_one_session(
                 conn, player_id, training_session_id, user_id, allow_override=override
             )
-            ex(conn, "UPDATE attendance SET status=?, entitlement_id=?, ledger_id=?, checked_by=?, cancelled=0 WHERE id=?",
-               (new_status, new_ent, new_ledger, user_id, existing["id"]))
+            no_balance = no_balance or new_ent is None
+            ex(conn, "UPDATE attendance SET status=?, entitlement_id=?, ledger_id=?, checked_by=?, cancelled=0, no_balance=? WHERE id=?",
+               (new_status, new_ent, new_ledger, user_id, 1 if no_balance else 0, existing["id"]))
         else:
             ex(conn, "UPDATE attendance SET status=?, checked_by=?, cancelled=0 WHERE id=?",
                (new_status, user_id, existing["id"]))
@@ -91,8 +105,13 @@ def mark_attendance(conn, training_session_id, player_id, new_status, user_id, a
 
     from business.entitlements import get_balances
     bal = get_balances(conn, player_id)
+    row = get_existing(conn, training_session_id, player_id)
+    nb = bool(row and row["no_balance"]) and new_status in DEDUCTING
+    msg = "تم تسجيل الحضور بنجاح."
+    if nb:
+        msg = "تم تسجيل الحضور ⚠️ (لا يوجد رصيد حصص مسجّل لهذا اللاعب — لم تُخصم حصة، راجع الإدارة لإضافة/تجديد الرصيد)"
     return {"already": False, "status": new_status, "remaining_total": bal["TOTAL"],
-            "message": "تم تسجيل الحضور بنجاح."}
+            "no_balance": nb, "message": msg}
 
 
 def cancel_attendance(conn, attendance_id, user_id, reason="إلغاء تحضير"):
@@ -103,6 +122,8 @@ def cancel_attendance(conn, attendance_id, user_id, reason="إلغاء تحضي�
         raise AttendanceError("سجل الحضور غير موجود")
     if row["status"] in DEDUCTING:
         reverse_consumption(conn, row["entitlement_id"], row["ledger_id"], user_id, attendance_id)
+        from business.points import reverse_attendance_points
+        reverse_attendance_points(conn, row["player_id"], row["training_session_id"], user_id)
     audit_log(conn, user_id, "CANCEL_ATTENDANCE", "attendance", attendance_id, before=row, reason=reason)
     ex(conn, "DELETE FROM attendance WHERE id=?", (attendance_id,))
 
@@ -120,7 +141,7 @@ def mark_all_present(conn, training_session_id, player_ids, user_id):
 
 def checkin_by_code(conn, training_session_id, player_code, user_id):
     """Barcode / QR / manual-code scan entrypoint used by the attendance screen."""
-    player = q1(conn, "SELECT * FROM players WHERE player_code=?", (player_code.strip(),))
+    player = q1(conn, "SELECT * FROM players WHERE UPPER(player_code)=UPPER(?)", (player_code.strip(),))
     if not player:
         raise AttendanceError("لم يتم العثور على لاعب بهذا الكود")
     session = q1(conn, "SELECT * FROM training_sessions WHERE id=?", (training_session_id,))

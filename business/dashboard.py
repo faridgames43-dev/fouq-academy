@@ -18,7 +18,7 @@ def kpis(conn, branch_id=None):
 
     active_players = q1(conn, f"SELECT COUNT(*) c FROM players p WHERE p.status='ACTIVE'{bc}")["c"]
     new_players_30d = q1(
-        conn, f"SELECT COUNT(*) c FROM players p WHERE p.join_date >= date('now','-30 day'){bc}"
+        conn, f"SELECT COUNT(*) c FROM players p WHERE p.join_date >= date('now','+3 hours','-30 day'){bc}"
     )["c"]
 
     today = date.today().isoformat()
@@ -46,11 +46,11 @@ def kpis(conn, branch_id=None):
                                 WHERE s.created_at >= datetime('now','-30 day'){bc}""")["c"]
 
     revenue_month = q1(conn, f"""SELECT COALESCE(SUM(s.paid_amount),0) c FROM subscriptions s JOIN players p ON p.id=s.player_id
-                                 WHERE strftime('%Y-%m', s.created_at) = strftime('%Y-%m','now'){bc}""")["c"]
+                                 WHERE strftime('%Y-%m', s.created_at) = strftime('%Y-%m','now','+3 hours'){bc}""")["c"]
 
     total_players_for_rate = q1(conn, f"SELECT COUNT(*) c FROM players p WHERE 1=1{bc}")["c"] or 1
     expired_30d = q1(conn, f"""SELECT COUNT(*) c FROM subscriptions s JOIN players p ON p.id=s.player_id
-                                WHERE s.status='EXPIRED' AND s.end_date >= date('now','-30 day'){bc}""")["c"]
+                                WHERE s.status='EXPIRED' AND s.end_date >= date('now','+3 hours','-30 day'){bc}""")["c"]
     renewed_after_expiry = q1(conn, f"""SELECT COUNT(DISTINCT s1.player_id) c FROM subscriptions s1
                                         JOIN players p ON p.id = s1.player_id
                                         JOIN subscriptions s2 ON s2.player_id = s1.player_id AND s2.id > s1.id
@@ -92,7 +92,7 @@ def needs_attention_today(conn, branch_id=None):
     bc = _branch_clause(branch_id)
     items = []
 
-    unfinished_sessions = q1(conn, f"""SELECT COUNT(*) c FROM training_sessions ts WHERE ts.session_date <= date('now')
+    unfinished_sessions = q1(conn, f"""SELECT COUNT(*) c FROM training_sessions ts WHERE ts.session_date <= date('now','+3 hours')
         AND ts.status IN ('SCHEDULED','STARTED'){_branch_clause(branch_id,'ts')}""")["c"]
     if unfinished_sessions:
         items.append({"icon": "⏱️", "text": f"{unfinished_sessions} حصة لم تُغلق من المدرب", "href": "/attendance"})
@@ -117,7 +117,7 @@ def needs_attention_today(conn, branch_id=None):
         items.append({"icon": "⏳", "text": f"{expiring_7} اشتراك سينتهي خلال 7 أيام", "href": "/renewals"})
 
     missing_assessment = q1(conn, f"""SELECT COUNT(*) c FROM players p WHERE p.status='ACTIVE'{bc}
-        AND NOT EXISTS (SELECT 1 FROM assessments a WHERE a.player_id=p.id AND a.assessment_date >= date('now','-60 day'))""")["c"]
+        AND NOT EXISTS (SELECT 1 FROM assessments a WHERE a.player_id=p.id AND a.assessment_date >= date('now','+3 hours','-60 day'))""")["c"]
     if missing_assessment:
         items.append({"icon": "📝", "text": f"{missing_assessment} لاعبين يحتاجون تقييمًا", "href": "/players"})
 

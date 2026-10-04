@@ -11,7 +11,7 @@ def create_notification(conn, type_, title, body=None, user_id=None, player_id=N
     if dedupe:
         existing = q1(
             conn,
-            """SELECT id FROM notifications WHERE type=? AND date(created_at)=date('now')
+            """SELECT id FROM notifications WHERE type=? AND date(created_at,'+3 hours')=date('now','+3 hours')
                AND COALESCE(player_id,-1)=COALESCE(?,-1) AND COALESCE(user_id,-1)=COALESCE(?,-1)""",
             (type_, player_id, user_id),
         )

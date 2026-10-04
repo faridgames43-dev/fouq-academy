@@ -67,7 +67,7 @@ def coach_points_granted_today(conn, coach_user_id, player_id, cap_default=20):
     row = q1(
         conn,
         """SELECT COALESCE(SUM(amount),0) as total FROM points_transactions
-           WHERE user_id=? AND player_id=? AND date(created_at)=date('now') AND amount > 0""",
+           WHERE user_id=? AND player_id=? AND date(created_at,'+3 hours')=date('now','+3 hours') AND amount > 0""",
         (coach_user_id, player_id),
     )
     return row["total"] if row else 0
@@ -99,3 +99,35 @@ def cancel_points_transaction(conn, txn_id, user_id):
         raise PointsError("تم إلغاء هذه العملية مسبقًا")
     return award_points(conn, txn["player_id"], -txn["amount"], f"إلغاء عملية #{txn_id}: {txn['reason']}",
                          "REVERSAL", user_id)
+
+
+# ---------------------------------------------------------------------------
+# نقاط التحضير التلقائي (شاشة TV): مبكر / متأخر
+# ---------------------------------------------------------------------------
+EARLY_REASON = "الحضور المبكر"
+LATE_REASON = "الحضور المتأخر"
+
+
+def attendance_points_awarded(conn, player_id, training_session_id):
+    """هل مُنح اللاعب نقاط تحضير تلقائية (مبكر/متأخر) في هذه الحصة؟"""
+    return q1(
+        conn,
+        """SELECT * FROM points_transactions
+           WHERE player_id=? AND training_session_id=? AND category='ATTENDANCE'
+             AND reason IN (?,?) AND amount > 0 ORDER BY id DESC LIMIT 1""",
+        (player_id, training_session_id, EARLY_REASON, LATE_REASON),
+    )
+
+
+def reverse_attendance_points(conn, player_id, training_session_id, user_id):
+    """يعكس نقاط التحضير التلقائية لهذه الحصة (إن وُجدت ولم تُعكس) عبر سجل
+    عكسي — لا يُحذف أي سجل. إذا كان اللاعب صرف النقاط فعلًا ولا يكفي رصيده
+    للعكس يُترك كما هو (الرصيد لا يصبح سالبًا أبدًا)."""
+    txn = attendance_points_awarded(conn, player_id, training_session_id)
+    if not txn:
+        return False
+    try:
+        cancel_points_transaction(conn, txn["id"], user_id)
+        return True
+    except PointsError:
+        return False
