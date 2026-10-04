@@ -10,8 +10,6 @@ DEFAULTS = {
     "sessions_alert_thresholds": json.dumps([5, 3, 1, 0]),
     "coach_daily_points_cap": "20",
     "coach_daily_compensation_cap": "0",  # coaches cannot grant compensation at all by default
-    # سياسة التحضير: 0 = لا يُرفض التحضير أبدًا (يُسجَّل مع تنبيه "بدون رصيد")، 1 = يُرفض عند عدم وجود رصيد
-    "attendance_requires_balance": "0",
     # شاشة التحضير TV: مدة التحضير المبكر بالدقائق ونقاط كل مرحلة
     "checkin_early_minutes": "20",
     "checkin_early_points": "40",

@@ -33,17 +33,14 @@ def get_existing(conn, training_session_id, player_id):
 
 
 def _resolve_override(conn, player_id, allow_override):
-    """سياسة الأكاديمية: التحضير لا يُرفض أبدًا بسبب رصيد الحصص (الإعداد
-    attendance_requires_balance=0 افتراضيًا). إذا لم يتوفر رصيد يُسجَّل الحضور
-    بدون خصم حصة ويُعلَّم "بدون رصيد" ليراجعه المسؤول — بدل رفض اللاعب
-    وهو واقف أمام المدرب. للرجوع للسلوك الصارم: اجعل الإعداد = 1."""
-    from business.settings_lib import get_setting
+    """سياسة الأكاديمية: التحضير لا يُرفض أبدًا بسبب رصيد الحصص.
+    إذا لم يتوفر رصيد يُسجَّل الحضور بدون خصم حصة ويُعلَّم "بدون رصيد"
+    ليراجعه المسؤول — بدل رفض اللاعب وهو واقف أمام المدرب.
+    (تمت إزالة الوضع الصارم نهائيًا؛ لا يوجد أي إعداد يعيد رفض الحضور.)
+    يرجع (override, no_balance)."""
     eligibility = get_attendance_eligibility(conn, player_id)
-    strict = get_setting(conn, "attendance_requires_balance", "0") == "1"
     if eligibility["code"] == "NO_SESSIONS" and not allow_override:
-        if strict:
-            raise AttendanceError("لا يمكن تسجيل الحضور: " + eligibility["detail"])
-        return True, True   # (override, no_balance)
+        return True, True
     return allow_override or eligibility["code"] == "ADMIN_OVERRIDE", False
 
 
@@ -126,6 +123,25 @@ def cancel_attendance(conn, attendance_id, user_id, reason="إلغاء تحضي�
         reverse_attendance_points(conn, row["player_id"], row["training_session_id"], user_id)
     audit_log(conn, user_id, "CANCEL_ATTENDANCE", "attendance", attendance_id, before=row, reason=reason)
     ex(conn, "DELETE FROM attendance WHERE id=?", (attendance_id,))
+
+
+def delete_training_session(conn, training_session_id, user_id, reason="حذف حصة تحضير"):
+    """يحذف حصة تحضير بالكامل: يلغي كل سجلات حضورها (فيُعاد أي خصم حصص ونقاط
+    تحضير ويُسجَّل عكسٌ في السجل)، ثم يحذف ملاحظات الحصة والحصة نفسها.
+    يرجع dict بعدد السجلات المُلغاة."""
+    ts = q1(conn, "SELECT * FROM training_sessions WHERE id=?", (training_session_id,))
+    if not ts:
+        raise AttendanceError("الحصة غير موجودة")
+    rows = q(conn, "SELECT * FROM attendance WHERE training_session_id=?", (training_session_id,))
+    player_ids = []
+    for r in rows:
+        cancel_attendance(conn, r["id"], user_id, reason)
+        player_ids.append(r["player_id"])
+    ex(conn, "DELETE FROM player_notes WHERE training_session_id=?", (training_session_id,))
+    audit_log(conn, user_id, "DELETE_TRAINING_SESSION", "training_sessions", training_session_id,
+              before=ts, reason=reason)
+    ex(conn, "DELETE FROM training_sessions WHERE id=?", (training_session_id,))
+    return {"cancelled": len(rows), "player_ids": player_ids}
 
 
 def mark_all_present(conn, training_session_id, player_ids, user_id):
