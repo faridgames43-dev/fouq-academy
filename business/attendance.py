@@ -47,6 +47,9 @@ def _resolve_override(conn, player_id, allow_override):
 def mark_attendance(conn, training_session_id, player_id, new_status, user_id, allow_override=False):
     """Create or update the attendance row for (session, player).
     Returns dict: {already: bool, status, remaining_total, message}"""
+    ts_row = q1(conn, "SELECT status FROM training_sessions WHERE id=?", (training_session_id,))
+    if ts_row and ts_row["status"] == "CANCELLED":
+        raise AttendanceError("هذه الحصة ملغاة — اضغط «استعادة الحصة» لإعادة فتحها قبل التحضير")
     existing = get_existing(conn, training_session_id, player_id)
 
     if existing and existing["status"] == new_status and not existing["cancelled"]:
@@ -142,6 +145,21 @@ def delete_training_session(conn, training_session_id, user_id, reason="حذف �
               before=ts, reason=reason)
     ex(conn, "DELETE FROM training_sessions WHERE id=?", (training_session_id,))
     return {"cancelled": len(rows), "player_ids": player_ids}
+
+
+def cancel_training_session(conn, training_session_id, user_id, reason="إلغاء حصة"):
+    """يلغي الحصة (تبقى في السجل بحالة «ملغاة»): يلغي تحضير كل من حُضّر فيها
+    فيُعاد خصم الحصص والنقاط، وتُغلق شاشة TV. يمكن استعادتها بـ«إعادة فتح»."""
+    ts = q1(conn, "SELECT * FROM training_sessions WHERE id=?", (training_session_id,))
+    if not ts:
+        raise AttendanceError("الحصة غير موجودة")
+    rows = q(conn, "SELECT * FROM attendance WHERE training_session_id=?", (training_session_id,))
+    for r in rows:
+        cancel_attendance(conn, r["id"], user_id, reason)
+    ex(conn, "UPDATE training_sessions SET status='CANCELLED' WHERE id=?", (training_session_id,))
+    audit_log(conn, user_id, "CANCEL_TRAINING_SESSION", "training_sessions", training_session_id,
+              before={"status": ts["status"]}, reason=reason)
+    return {"cancelled": len(rows), "player_ids": [r["player_id"] for r in rows]}
 
 
 def mark_all_present(conn, training_session_id, player_ids, user_id):
