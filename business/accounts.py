@@ -73,6 +73,8 @@ def change_own_password(conn, user_id, current_password, new_password):
         raise AccountError("كلمة المرور الحالية غير صحيحة")
     if not new_password or len(new_password) < 6:
         raise AccountError("كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل")
+    if new_password == current_password:
+        raise AccountError("اختر كلمة مرور جديدة مختلفة عن الحالية")
     ex(conn, "UPDATE users SET password_hash=?, must_reset_password=0 WHERE id=?",
        (generate_password_hash(new_password), user_id))
     audit_log(conn, user_id, "CHANGE_OWN_PASSWORD", "users", user_id)
