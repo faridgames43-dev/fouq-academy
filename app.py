@@ -30,6 +30,19 @@ def create_app():
         if g.user and g.user.get("must_reset_password") and request.endpoint not in FORCED_RESET_ALLOWED_ENDPOINTS:
             return redirect(url_for("auth.change_password"))
 
+    @app.template_filter("ksa")
+    def ksa_filter(value, length=16):
+        """الأوقات تُخزَّن في قاعدة البيانات بتوقيت UTC (datetime('now')) —
+        هذا الفلتر يحوّلها لتوقيت السعودية (+3) عند العرض."""
+        from datetime import datetime, timedelta
+        if not value:
+            return "-"
+        try:
+            dt = datetime.strptime(str(value)[:19], "%Y-%m-%d %H:%M:%S") + timedelta(hours=3)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")[:length]
+        except Exception:
+            return str(value)
+
     @app.context_processor
     def inject_globals():
         from business.notifications import unread_count

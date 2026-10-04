@@ -1,6 +1,14 @@
 import sqlite3
 import os
+import time
 from contextlib import contextmanager
+
+# توقيت المملكة العربية السعودية (UTC+3، بدون توقيت صيفي) لكل النظام.
+# نستخدم صيغة POSIX المباشرة حتى لا نعتمد على وجود قاعدة tzdata على الخادم:
+# بعدها date.today() / datetime.now() / SQLite 'localtime' كلها تعطي توقيت الرياض.
+os.environ["TZ"] = "<+03>-3"
+if hasattr(time, "tzset"):
+    time.tzset()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # On Render, DATA_DIR points at the mounted persistent disk (/var/data) so the
@@ -120,6 +128,19 @@ def migrate_db():
     add_column("training_sessions", "session_note TEXT")
     add_column("points_transactions", "note TEXT")
     add_column("users", "must_reset_password INTEGER NOT NULL DEFAULT 0")
+    # شاشة التحضير TV: وقت بدء/إغلاق التحضير (بتوقيت السعودية) ومقطع الاحتفال لكل لاعب
+    add_column("training_sessions", "checkin_started_at TEXT")
+    add_column("training_sessions", "checkin_closed_at TEXT")
+    add_column("players", "celebration_url TEXT")
+    add_column("attendance", "no_balance INTEGER NOT NULL DEFAULT 0")
+    cur.execute("""CREATE TABLE IF NOT EXISTS player_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL REFERENCES players(id),
+        training_session_id INTEGER,
+        note TEXT NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""")
 
     conn.commit()
 

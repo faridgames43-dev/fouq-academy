@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS players (
     attendance_override INTEGER NOT NULL DEFAULT 0,
     attendance_override_note TEXT,
     attendance_override_by INTEGER REFERENCES users(id),
+    celebration_url TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -199,6 +200,8 @@ CREATE TABLE IF NOT EXISTS training_sessions (
     status TEXT NOT NULL DEFAULT 'SCHEDULED' CHECK(status IN ('SCHEDULED','STARTED','COMPLETED','CANCELLED')),
     player_of_session_id INTEGER REFERENCES players(id),
     session_note TEXT,
+    checkin_started_at TEXT,
+    checkin_closed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -212,6 +215,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     entitlement_id INTEGER REFERENCES session_entitlements(id),
     ledger_id INTEGER REFERENCES session_ledger(id),
     cancelled INTEGER NOT NULL DEFAULT 0,
+    no_balance INTEGER NOT NULL DEFAULT 0,
     cancelled_at TEXT,
     cancelled_by INTEGER REFERENCES users(id),
     UNIQUE(training_session_id, player_id)
