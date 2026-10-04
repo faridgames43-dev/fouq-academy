@@ -130,6 +130,8 @@ img { max-width: 100%; }
 .btn-gold:hover { background: var(--gold-light); }
 .btn-outline { background: #fff; border-color: var(--border); color: var(--text); }
 .btn-outline:hover { border-color: var(--navy-600); }
+.btn-red { background: #d92d20; color: #fff !important; border: 1px solid #b42318; font-weight: 700; }
+.btn-red:hover { background: #b42318; }
 .btn-danger { background: #fdeceb; color: var(--red); }
 .btn-sm { padding: 6px 11px; font-size: 12px; border-radius: 8px; }
 .btn-block { width: 100%; justify-content: center; }
