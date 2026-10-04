@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}فحص دخول اللاعبين{% endblock %}
+{% block page_title %}🔍 فحص دخول اللاعبين{% endblock %}
+{% block content %}
+<div class="card section" style="max-width:720px;">
+  <p class="muted" style="font-size:13.5px;">اكتب كلمة المرور التي أعطيتها للاعبين (مثل 123456) وسأفحص كل لاعب: هل يستطيع الدخول بكود اللاعب وهذه الكلمة؟ ومن لا يستطيع أعرض لك السبب، ويمكنك إصلاحهم بضغطة واحدة (تُطبَّق الكلمة، ويُفعَّل الحساب، ويُنشأ حساب لمن لا حساب له، ويُطلب منهم تغييرها عند أول دخول).</p>
+  <form method="post" action="/accounts/login-check">
+    <div class="field"><label>كلمة المرور المراد فحصها</label><input type="text" name="password" value="{{ pw or '123456' }}" required minlength="4"></div>
+    <div class="field"><label>كود لاعب محدد (اختياري — اتركه فارغًا لفحص الجميع)</label><input type="text" name="code" value="{{ code }}" placeholder="FOUQ-9019"></div>
+    <button class="btn btn-gold" type="submit">🔍 فحص</button>
+  </form>
+</div>
+{% if rows is not none %}
+{% set bad = rows|selectattr('reason')|list %}
+<div class="card section" style="max-width:720px;">
+  {% if fixed is not none %}<p style="color:#067647;font-weight:700;">✅ تم إصلاح {{ fixed }} حساب.</p>{% endif %}
+  <p>تم فحص <b>{{ rows|length }}</b> لاعب — يستطيع الدخول: <b>{{ rows|length - bad|length }}</b> — لا يستطيع: <b style="color:#b42318;">{{ bad|length }}</b></p>
+  {% if bad %}
+  <form method="post" action="/accounts/login-check" onsubmit="return confirm('سيتم تطبيق كلمة المرور وتفعيل حسابات {{ bad|length }} لاعب. متابعة؟');">
+    <input type="hidden" name="password" value="{{ pw }}"><input type="hidden" name="code" value="{{ code }}"><input type="hidden" name="fix" value="1">
+    <button class="btn btn-red" type="submit">🛠️ إصلاح الجميع ({{ bad|length }})</button>
+  </form>
+  <div class="table-wrap" style="margin-top:12px;"><table>
+    <thead><tr><th>اللاعب</th><th>الكود</th><th>سبب عدم الدخول</th></tr></thead>
+    <tbody>{% for r in bad %}<tr><td>{{ r.first_name }} {{ r.last_name }}</td><td>{{ r.player_code }}</td><td>{{ r.reason }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
