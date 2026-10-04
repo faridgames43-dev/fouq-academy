@@ -16,6 +16,7 @@
     {{ {'SCHEDULED':'مجدولة','STARTED':'جارية','COMPLETED':'مكتملة','CANCELLED':'ملغاة'}[ts.status] }}
   </span>
   <a class="btn btn-gold" href="/attendance/session/{{ ts.id }}/tv" target="_blank">📺 شاشة التحضير الكبيرة (TV)</a>
+  <a class="btn btn-outline" href="/attendance/session/{{ ts.id }}/quick">⚡ رصد سريع للنقاط والملاحظات</a>
   <form method="post" action="/attendance/session/{{ ts.id }}/mark_all_present" onsubmit="return confirm('تحضير الجميع كحاضر؟ يمكنك تعديل الحالات الفردية بعدها.');">
     <button class="btn btn-outline" type="submit">✅ تحضير الجميع حاضر</button>
   </form>
@@ -58,7 +59,7 @@
       <input type="checkbox" class="select-player" data-player="{{ p.id }}" style="width:18px; height:18px; margin-left:6px;">
       {% endif %}
       <div class="avatar">{% if p.photo_url %}<img src="{{ p.photo_url }}" alt="">{% else %}{{ p.first_name[0] }}{% endif %}</div>
-      <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div><small>{{ p.player_code }}</small></div>
+      <div class="meta"><div>{{ p.first_name }} {{ p.last_name }}</div><small>{{ p.player_code }}</small>{% if p.no_balance %}<div><span class="badge badge-amber" title="حضر بدون رصيد حصص مسجّل">⚠️ بدون رصيد</span></div>{% endif %}</div>
     </div>
     <div class="status-buttons">
       {% for st, label in [('PRESENT','حاضر'),('LATE','متأخر'),('ABSENT','غائب'),('EXCUSED','بعذر')] %}
@@ -91,6 +92,7 @@ scanInput.addEventListener("keydown", async (e) => {
   const res = await postJSON(`/attendance/session/${sessionId}/scan`, { code });
   if (res.ok) {
     toast(feedback, `${res.already ? "⚠️ " : "✅ "} ${res.player_name} — ${res.message} — المتبقي: ${res.remaining_total} حصة`, !res.already);
+    if (res.no_balance) { alert("⚠️ " + res.player_name + ": تم تسجيل حضوره لكن لا يوجد له رصيد حصص مسجّل — راجع الإدارة لإضافة/تجديد الرصيد."); }
     const card = document.getElementById("card-" + res.player_id);
     if (card) {
       card.className = "attend-card status-PRESENT";
@@ -116,6 +118,7 @@ document.querySelectorAll(".status-btn").forEach(btn => {
         b.classList.remove("active-PRESENT","active-LATE","active-ABSENT","active-EXCUSED");
       });
       btn.classList.add("active-" + status);
+      if (res.no_balance) { alert("⚠️ تم تسجيل الحضور لكن لا يوجد رصيد حصص مسجّل لهذا اللاعب — لم تُخصم حصة. راجع الإدارة."); }
     } else {
       alert(res.message);
     }

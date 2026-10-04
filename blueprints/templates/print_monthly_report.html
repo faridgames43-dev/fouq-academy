@@ -17,7 +17,8 @@
       <tr><td>اشتراكات منتهية</td><td>{{ data.expired }}</td></tr>
       <tr><td>حصص مستحقة قائمة (التزامات على الأكاديمية)</td><td>{{ data.outstanding_compensation }}</td></tr>
       <tr><td>تجديدات (30 يوم)</td><td>{{ data.renewals_30d }}</td></tr>
-      <tr><td>إيراد الشهر الحالي</td><td>{{ "%.0f"|format(data.revenue_month) }} ر.س</td></tr>
+      <tr><td>إيراد الشهر الحالي (سجلات النظام الداخلية)</td><td>{{ "%.0f"|format(data.revenue_month) }} ر.س</td></tr>
+      {% if data.actual_revenue_amount is not none %}<tr><td>إجمالي الإيراد الفعلي (منصة الدفع){% if data.actual_revenue_period %} — {{ data.actual_revenue_period }}{% endif %}</td><td>{{ "{:,.2f}".format(data.actual_revenue_amount) }} ر.س</td></tr>{% endif %}
       <tr><td>معدل التجديد</td><td>{{ data.renewal_rate }}٪</td></tr>
       <tr><td>معدل التسرب (Churn)</td><td>{{ data.churn }}٪</td></tr>
       <tr><td>معدل الحضور العام</td><td>{{ data.avg_attendance }}٪</td></tr>

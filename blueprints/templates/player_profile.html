@@ -16,6 +16,16 @@
       <label class="btn btn-sm btn-outline" for="hero-photo-input" style="cursor:pointer;">📷 تغيير الصورة</label>
       <input id="hero-photo-input" type="file" name="photo" accept="image/*" style="display:none;" onchange="this.form.submit()">
     </form>
+    <form method="post" action="/players/{{ player.id }}/celebration" enctype="multipart/form-data" style="margin-top:6px;display:inline-block;">
+      <label class="btn btn-sm btn-outline" for="hero-celeb-input" style="cursor:pointer;">🎬 {{ 'تغيير مقطع الاحتفالية' if player.celebration_url else 'إضافة مقطع احتفالية' }}</label>
+      <input id="hero-celeb-input" type="file" name="celebration" accept="video/mp4,video/webm,video/quicktime" style="display:none;" onchange="this.form.submit()">
+    </form>
+    {% if player.celebration_url %}
+    <form method="post" action="/players/{{ player.id }}/celebration" style="margin-top:6px;display:inline-block;" onsubmit="return confirm('حذف مقطع الاحتفالية؟');">
+      <input type="hidden" name="remove" value="1"><button class="btn btn-sm btn-danger" type="submit">حذف المقطع</button>
+    </form>
+    {% endif %}
+    <a class="btn btn-sm btn-outline" style="margin-top:6px;" href="/players/{{ player.id }}/card.pdf" target="_blank">🪪 طباعة بطاقة اللاعب (A4)</a>
     {% endif %}
   </div>
   <img src="/players/{{ player.id }}/barcode.png" alt="Barcode" style="background:#fff;padding:6px;border-radius:8px;">
@@ -200,7 +210,7 @@
     <thead><tr><th>التاريخ</th><th>الإجراء</th><th>النوع</th><th>الكمية</th><th>السبب</th></tr></thead>
     <tbody>
     {% for l in ledger %}
-      <tr><td>{{ l.created_at }}</td><td>{{ {'GRANT':'منح','ATTENDANCE_DEDUCT':'خصم حضور','ATTENDANCE_REVERSE':'عكس خصم','EXPIRE':'انتهاء صلاحية','ADMIN_ADJUST':'تعديل إداري','CANCEL':'إلغاء'}[l.action] }}</td>
+      <tr><td>{{ l.created_at|ksa }}</td><td>{{ {'GRANT':'منح','ATTENDANCE_DEDUCT':'خصم حضور','ATTENDANCE_REVERSE':'عكس خصم','EXPIRE':'انتهاء صلاحية','ADMIN_ADJUST':'تعديل إداري','CANCEL':'إلغاء'}[l.action] }}</td>
         <td>{{ l.entitlement_type }}</td>
         <td style="color: {{ 'var(--green)' if l.quantity > 0 else 'var(--red)' }};">{{ '+' if l.quantity>0 else '' }}{{ l.quantity }}</td>
         <td>{{ l.reason }}</td></tr>
@@ -228,7 +238,7 @@
       <thead><tr><th>التاريخ</th><th>المسؤول</th><th>الكمية</th><th>السبب</th><th>الرصيد بعدها</th><th></th></tr></thead>
       <tbody>
       {% for t in pts_hist %}
-        <tr><td>{{ t.created_at }}</td><td>{{ t.coach_name or '-' }}</td><td style="color: {{ 'var(--green)' if t.amount > 0 else 'var(--red)' }};">{{ '+' if t.amount>0 else '' }}{{ t.amount }}</td><td>{{ t.reason }}{% if t.note %}<div class="muted" style="font-size:11px;">{{ t.note }}</div>{% endif %}</td><td>{{ t.balance_after }}</td>
+        <tr><td>{{ t.created_at|ksa }}</td><td>{{ t.coach_name or '-' }}</td><td style="color: {{ 'var(--green)' if t.amount > 0 else 'var(--red)' }};">{{ '+' if t.amount>0 else '' }}{{ t.amount }}</td><td>{{ t.reason }}{% if t.note %}<div class="muted" style="font-size:11px;">{{ t.note }}</div>{% endif %}</td><td>{{ t.balance_after }}</td>
           <td>
             {% if t.category != 'REVERSAL' and current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
             <form class="txn-cancel-form" method="post" action="/players/{{ player.id }}/points/{{ t.id }}/cancel"
@@ -248,6 +258,12 @@
   <div class="section-header"><h2>ملاحظات</h2></div>
   <div class="card">
     <p>{{ player.notes or 'لا توجد ملاحظات' }}</p>
+    {% if session_notes %}
+    <div class="card-title" style="margin-top:8px;">📝 ملاحظات الحصص</div>
+    <ul style="padding-inline-start:18px;margin:4px 0 10px;">
+      {% for n in session_notes %}<li style="margin-bottom:4px;">{{ n.note }} <small class="muted">— {{ n.author or '-' }} · {{ n.created_at|ksa }}</small></li>{% endfor %}
+    </ul>
+    {% endif %}
     {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR','COACH'] %}
     <form method="post" action="/players/{{ player.id }}/note" style="margin-top:10px;">
       <textarea name="notes" rows="3" style="width:100%; border-radius:10px; border:1px solid var(--border); padding:8px;">{{ player.notes or '' }}</textarea>

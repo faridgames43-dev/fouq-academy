@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}طباعة بطاقات اللاعبين{% endblock %}
+{% block page_title %}🪪 طباعة بطاقات اللاعبين (A4){% endblock %}
+{% block content %}
+<div class="card section">
+  <p class="muted" style="font-size:13.5px;">بطاقة بهوية الأكاديمية لكل لاعب: الصورة + الاسم + رقم اللاعب + الباركود للتحضير اليومي. الطباعة بمقاس A4 — 10 بطاقات في الصفحة للطباعة الجماعية، أو بطاقة كبيرة واحدة للطباعة الفردية.</p>
+  <form method="get" class="flex gap-8 flex-wrap items-center">
+    <select name="group_id" class="field" style="min-width:170px" onchange="this.form.submit()">
+      <option value="">كل المجموعات</option>
+      {% for gr in groups %}<option value="{{ gr.id }}" {% if group_id==gr.id|string %}selected{% endif %}>{{ gr.name }}</option>{% endfor %}
+    </select>
+    <select name="category_id" class="field" style="min-width:170px" onchange="this.form.submit()">
+      <option value="">كل الفئات</option>
+      {% for ca in categories %}<option value="{{ ca.id }}" {% if category_id==ca.id|string %}selected{% endif %}>{{ ca.name }}</option>{% endfor %}
+    </select>
+    <span class="muted">{{ players|length }} لاعب</span>
+  </form>
+</div>
+
+<form method="get" action="/players/cards.pdf" target="_blank" id="cards-form">
+  <input type="hidden" name="group_id" value="{{ group_id }}">
+  <input type="hidden" name="category_id" value="{{ category_id }}">
+  <div class="card section">
+    <div class="card-title">خيارات الطباعة</div>
+    <div class="flex gap-8 flex-wrap items-center" style="gap:18px;">
+      <label><input type="radio" name="mode" value="all" checked> 🖨️ طباعة الكل ({{ players|length }})</label>
+      <label><input type="radio" name="mode" value="count"> 🔢 عدد محدد: أول
+        <input type="number" name="n" value="8" min="1" max="500" style="width:80px;" class="field"> لاعب</label>
+      <label><input type="radio" name="mode" value="selected" id="mode-selected"> ✅ المحددون من الجدول (<span id="sel-n">0</span>)</label>
+      <button class="btn btn-gold" type="submit">📄 إنشاء ملف الطباعة (PDF)</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th><input type="checkbox" id="chk-all"></th><th>اللاعب</th><th>الرقم</th><th>الفئة</th><th>المجموعة</th><th>بطاقة فردية</th></tr></thead>
+      <tbody>
+      {% for p in players %}
+        <tr>
+          <td><input type="checkbox" class="chk" name="ids" value="{{ p.id }}"></td>
+          <td>{{ p.first_name }} {{ p.last_name }}</td>
+          <td>{{ p.code }}</td>
+          <td>{{ p.category_name or '-' }}</td>
+          <td>{{ p.group_name or '-' }}</td>
+          <td><a class="btn btn-sm btn-outline" href="/players/{{ p.id }}/card.pdf" target="_blank">🪪 طباعة</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">لا يوجد لاعبون</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const chks = () => Array.from(document.querySelectorAll(".chk"));
+function upd() {
+  const n = chks().filter(c => c.checked).length;
+  document.getElementById("sel-n").textContent = n;
+  if (n) document.getElementById("mode-selected").checked = true;
+}
+document.getElementById("chk-all").addEventListener("change", e => { chks().forEach(c => c.checked = e.target.checked); upd(); });
+chks().forEach(c => c.addEventListener("change", upd));
+document.getElementById("cards-form").addEventListener("submit", e => {
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  if (mode === "selected" && !chks().some(c => c.checked)) { e.preventDefault(); alert("حدد لاعبًا واحدًا على الأقل من الجدول."); }
+});
+</script>
+{% endblock %}

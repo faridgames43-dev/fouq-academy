@@ -8,6 +8,7 @@
   </form>
   {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
   <a class="btn btn-primary" href="/attendance/new">+ إنشاء حصة</a>
+  <a class="btn btn-outline" href="/attendance/no-balance">⚠️ حضور بدون رصيد</a>
   {% endif %}
 </div>
 <div class="grid grid-3">

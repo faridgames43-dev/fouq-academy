@@ -16,7 +16,7 @@
     {% if not s %}
       <span class="badge badge-gray">لم تسلّم بعد</span>
     {% elif s.status == 'PENDING' %}
-      <span class="badge badge-amber">تم التسليم {{ s.submitted_at }} — بانتظار مراجعة المدرب</span>
+      <span class="badge badge-amber">تم التسليم {{ s.submitted_at|ksa }} — بانتظار مراجعة المدرب</span>
     {% elif s.status == 'APPROVED' %}
       <span class="badge badge-green">✅ معتمدة — حصلت على {{ a.points_reward }} نقطة!</span>
     {% else %}

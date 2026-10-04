@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}رصد سريع{% endblock %}
+{% block page_title %}⚡ رصد سريع — {{ ts.group_name }}{% endblock %}
+{% block content %}
+<style>
+  .q-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .q-card { background:var(--card,#fff); border:2px solid var(--border,#e6e9f2); border-radius:14px; padding:10px; text-align:center; cursor:pointer; user-select:none; }
+  .q-card.sel { border-color:var(--gold,#cf931e); background:#fff8e6; box-shadow:0 0 0 3px rgba(207,147,30,.25); }
+  .q-card .nm { font-weight:800; font-size:14px; margin-top:4px; }
+  .q-card .pt { color:var(--gold,#cf931e); font-weight:800; }
+  .q-panel { position:sticky; top:8px; z-index:20; }
+  .chip { display:inline-block; margin:3px; padding:8px 14px; border-radius:999px; border:0; font-weight:800; cursor:pointer; font-family:inherit; font-size:14px; }
+  .chip.add { background:#dcfce7; color:#14532d; } .chip.sub { background:#fee2e2; color:#7f1d1d; }
+  .chip.on { outline:3px solid #0b1f35; }
+</style>
+
+<div class="card section q-panel">
+  <div class="flex gap-8 flex-wrap items-center" style="margin-bottom:6px;">
+    <b>1) حدد اللاعب/اللاعبين</b>
+    <button class="btn btn-sm btn-outline" type="button" id="sel-all">تحديد الكل</button>
+    <button class="btn btn-sm btn-outline" type="button" id="sel-none">مسح التحديد</button>
+    <span class="muted" id="sel-count">لا يوجد تحديد</span>
+    <a class="btn btn-sm btn-outline" href="/attendance/session/{{ ts.id }}" style="margin-inline-start:auto;">← صفحة الحصة</a>
+  </div>
+  <div><b>2) اختر سببًا (ضغطة واحدة)</b></div>
+  <div>
+    {% for r, amt in add_reasons %}<button type="button" class="chip add" data-reason="{{ r }}" data-amount="{{ amt }}">➕ {{ r }} (+{{ amt }})</button>{% endfor %}
+  </div>
+  <div>
+    {% for r, amt in sub_reasons %}<button type="button" class="chip sub" data-reason="{{ r }}" data-amount="-{{ amt }}">➖ {{ r }} (-{{ amt }})</button>{% endfor %}
+  </div>
+  <div class="flex gap-8 flex-wrap items-center" style="margin-top:8px;">
+    <label>عدد النقاط: <input type="number" id="amount" class="field" style="width:90px;" value="0"></label>
+    <input type="text" id="note" class="field" style="flex:1;min-width:220px;" placeholder="📝 ملاحظة (اختياري) — تُحفظ في ملف اللاعب">
+    <button class="btn btn-gold" type="button" id="save">💾 حفظ الرصد</button>
+  </div>
+  <div id="fb" class="scan-feedback"></div>
+</div>
+
+<div class="q-grid section">
+  {% for p in roster %}
+  <div class="q-card" data-id="{{ p.id }}">
+    <div class="avatar" style="margin:0 auto;">{% if p.photo_url %}<img src="{{ p.photo_url }}" alt="">{% else %}{{ p.first_name[0] }}{% endif %}</div>
+    <div class="nm">{{ p.first_name }} {{ p.last_name }}</div>
+    <div class="pt">⭐ <span class="ptv">{{ p.points }}</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const SID = {{ ts.id }};
+let reason = "";
+const cards = () => Array.from(document.querySelectorAll(".q-card"));
+const selected = () => cards().filter(c => c.classList.contains("sel")).map(c => c.dataset.id);
+function upd() { const n = selected().length; document.getElementById("sel-count").textContent = n ? n + " محدد" : "لا يوجد تحديد"; }
+cards().forEach(c => c.addEventListener("click", () => { c.classList.toggle("sel"); upd(); }));
+document.getElementById("sel-all").onclick = () => { cards().forEach(c => c.classList.add("sel")); upd(); };
+document.getElementById("sel-none").onclick = () => { cards().forEach(c => c.classList.remove("sel")); upd(); };
+document.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", () => {
+  document.querySelectorAll(".chip").forEach(x => x.classList.remove("on")); ch.classList.add("on");
+  reason = ch.dataset.reason; document.getElementById("amount").value = ch.dataset.amount;
+}));
+document.getElementById("save").addEventListener("click", async () => {
+  const ids = selected(); const fb = document.getElementById("fb");
+  if (!ids.length) { toast(fb, "❌ حدد لاعبًا واحدًا على الأقل", false); return; }
+  const amount = parseInt(document.getElementById("amount").value || "0", 10);
+  const note = document.getElementById("note").value.trim();
+  const res = await postJSON(`/attendance/session/${SID}/quick/save`, { player_ids: ids, reason, amount, note });
+  if (!res.ok) { toast(fb, "❌ " + (res.message || "تعذّر الحفظ"), false); return; }
+  res.results.forEach(r => { const c = document.querySelector(`.q-card[data-id="${r.player_id}"] .ptv`); if (c && r.ok) c.textContent = r.points; });
+  const failed = res.results.filter(r => !r.ok);
+  toast(fb, `✅ تم الرصد لـ ${res.saved} لاعب` + (failed.length ? ` — تعذّر ${failed.length}: ${failed[0].message}` : ""), !failed.length);
+  document.getElementById("note").value = ""; cards().forEach(c => c.classList.remove("sel")); upd();
+});
+</script>
+{% endblock %}

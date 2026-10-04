@@ -1,26 +1,28 @@
 {% extends "base.html" %}
-{% block title %}تصدير بيانات لاعبي أكاديمية فوق{% endblock %}
-{% block page_title %}تصدير بيانات لاعبي أكاديمية فوق{% endblock %}
+{% block title %}تصدير بيانات اللاعبين{% endblock %}
+{% block page_title %}تصدير بيانات دخول اللاعبين{% endblock %}
 {% block content %}
 
-<div class="section card" style="border-right:4px solid var(--gold);">
-  <p class="muted" style="font-size:13px;">
-    القائمة أدناه فقط اللاعبين الذين <b>player_type = FOUQ</b> (عضوية أكاديمية فوق الفعلية) — لاعبو نادي تواصل
-    الرياضي السابقين (LEGACY) مستبعدون تلقائيًا لأنهم لا ينتمون لأكاديمية فوق. الترتيب أبجدي حسب اسم اللاعب.
+<div class="section card">
+  <div class="card-title">اختر نوع التصدير</div>
+  <div class="flex gap-8 flex-wrap">
+    {% for key in ['all','fouq','legacy'] %}
+    <a class="btn {{ 'btn-gold' if rtype==key else 'btn-outline' }}" href="/accounts/export-fouq-roster?type={{ key }}">
+      {{ type_labels[key] }} ({{ counts[key] }})
+    </a>
+    {% endfor %}
+  </div>
+  <p class="muted" style="font-size:13px;margin-top:10px;">
+    «أكاديمية فوق» = العضوية الفعلية (FOUQ) · «نادي تواصل» = لاعبو نادي تواصل الرياضي السابقون (LEGACY). الترتيب أبجدي.
   </p>
   <p class="muted" style="font-size:13px;">
-    <b>ملاحظة مهمة:</b> عمود «كلمة المرور المؤقتة» سيظهر في ملف الـPDF فارغًا لكل اللاعبين — كلمات المرور
-    محفوظة في قاعدة البيانات بتشفير أحادي الاتجاه (hash) ولا يمكن استرجاع القيمة الأصلية بعد إنشاء الحساب،
-    حتى من قبل الإدارة. الحقل يبقى فارغًا في المستند بدل وضع بيانات غير صحيحة.
+    <b>ملاحظة:</b> عمود كلمة المرور يظهر فارغًا لأن كلمات المرور محفوظة بتشفير أحادي الاتجاه ولا يمكن استرجاعها.
+    لملف فيه كلمة المرور الموحدة استخدم <a href="/accounts/credentials-sheet">ملف بيانات الدخول</a>.
   </p>
-</div>
-
-<div class="section grid grid-3">
-  <div class="card"><div class="card-title">إجمالي لاعبي أكاديمية فوق (FOUQ)</div><div style="font-size:28px;font-weight:800;">{{ count }}</div></div>
 </div>
 
 <div class="section">
-  <a class="btn btn-gold" href="/accounts/export-fouq-roster.pdf">⬇️ تحميل PDF ({{ count }} لاعب)</a>
+  <a class="btn btn-gold" href="/accounts/export-fouq-roster.pdf?type={{ rtype }}">⬇️ تحميل PDF — {{ type_labels[rtype] }} ({{ count }})</a>
   <a class="btn btn-outline" href="/players">إلغاء والعودة لقائمة اللاعبين</a>
 </div>
 
@@ -28,21 +30,20 @@
   <div class="card-title" style="margin:0 0 8px;">اللاعبون المرتبون أبجديًا ({{ players|length }})</div>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr>
-        <th>#</th><th>اسم اللاعب</th><th>اسم المستخدم (الكود)</th><th>الفرع</th><th>الفئة</th><th>الحالة</th>
-      </tr></thead>
+      <thead><tr><th>#</th><th>اسم اللاعب</th><th>النوع</th><th>اسم المستخدم (الكود)</th><th>الفرع</th><th>الفئة</th><th>الحالة</th></tr></thead>
       <tbody>
         {% for p in players %}
         <tr>
           <td>{{ loop.index }}</td>
           <td><b>{{ p.first_name }} {{ p.last_name }}</b></td>
+          <td>{% if p.player_type=='LEGACY' %}<span class="badge badge-purple">تواصل سابقًا</span>{% else %}<span class="badge badge-blue">فوق</span>{% endif %}</td>
           <td>{{ p.code }}</td>
           <td>{{ p.branch_name or '-' }}</td>
           <td>{{ p.category_name or 'بدون فئة' }}</td>
           <td><span class="badge badge-gray">{{ p.status }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="muted">لا يوجد أي لاعب بعضوية أكاديمية فوق (FOUQ) حاليًا</td></tr>
+        <tr><td colspan="7" class="muted">لا يوجد لاعبون في هذا النوع</td></tr>
         {% endfor %}
       </tbody>
     </table>

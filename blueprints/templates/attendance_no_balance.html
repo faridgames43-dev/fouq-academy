@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}حضور بدون رصيد{% endblock %}
+{% block page_title %}⚠️ لاعبون حضروا بدون رصيد حصص مسجّل{% endblock %}
+{% block content %}
+<div class="card section">
+  <p class="muted" style="font-size:13.5px;">هؤلاء اللاعبون سُجّل حضورهم بدون خصم حصة لأن رصيدهم في النظام صفر. إن كانت لهم حصص متبقية فعلًا (مثلًا من منصة الاشتراك السابقة) أضف رصيدهم من «تعديل الحصص» ليظهر عدد الحصص الصحيح، أو جدّد اشتراكهم.</p>
+</div>
+<div class="table-wrap"><table>
+  <thead><tr><th>اللاعب</th><th>الكود</th><th>مرات الحضور بدون رصيد</th><th>آخر حصة</th><th>الرصيد الحالي</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td>{{ r.first_name }} {{ r.last_name }}</td><td>{{ r.player_code }}</td><td>{{ r.cnt }}</td><td>{{ r.last_date }}</td><td>{{ r.balance }}</td>
+        <td><a class="btn btn-sm btn-gold" href="/players/{{ r.id }}/entitlements/adjust">➕ إضافة رصيد</a>
+            <a class="btn btn-sm btn-outline" href="/players/{{ r.id }}/subscribe">تجديد</a></td></tr>
+  {% else %}<tr><td colspan="6" class="muted">لا يوجد — كل من حضر لديه رصيد ✅</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endblock %}

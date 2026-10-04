@@ -2,105 +2,343 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>شاشة التحضير · {{ ts.group_name }} · أكاديمية فوق</title>
   <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    :root { --tv-green:#16a34a; --tv-green-d:#0f7a37; --tv-red:#dc2626; --tv-red-d:#a31a1a; }
+    html, body { margin:0; background:#071a2e; color:#fff; font-family:inherit; }
+    body { min-height:100vh; overflow-x:hidden; }
+    .tvw { padding:14px 22px 30px; }
+    .tvw-top { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:12px; }
+    .tvw-top img { height:62px; }
+    .tvw-title h1 { margin:0; font-size:30px; }
+    .tvw-title .sub { color:var(--gold-light,#e8b94f); font-weight:700; font-size:15px; }
+    .tvw-clock { margin-inline-start:auto; text-align:center; background:rgba(255,255,255,.08); border-radius:16px; padding:6px 20px; }
+    .tvw-clock .t { font-size:34px; font-weight:800; letter-spacing:1px; direction:ltr; }
+    .tvw-clock .d { font-size:13px; color:#9fb0cc; }
+    .tvw-back { color:#9fb0cc; text-decoration:none; font-size:14px; }
+
+    .tvw-controls { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:10px 0 14px; }
+    .tvw-btn { border:0; border-radius:22px; padding:22px 10px; font-size:34px; font-weight:900; color:#fff; cursor:pointer;
+      box-shadow:0 8px 0 rgba(0,0,0,.35); transition:transform .08s, box-shadow .08s, opacity .2s; font-family:inherit; line-height:1.2; }
+    .tvw-btn small { display:block; font-size:15px; font-weight:700; opacity:.92; margin-top:4px; }
+    .tvw-btn:active:not(:disabled) { transform:translateY(6px); box-shadow:0 2px 0 rgba(0,0,0,.35); }
+    .tvw-btn.start { background:linear-gradient(180deg,#22c55e,var(--tv-green-d)); }
+    .tvw-btn.stop { background:linear-gradient(180deg,#ef4444,var(--tv-red-d)); }
+    .tvw-btn:disabled { opacity:.32; cursor:not-allowed; box-shadow:none; }
+
+    .tvw-phase { border-radius:18px; padding:14px 20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+      font-size:24px; font-weight:800; margin-bottom:14px; background:#10294a; }
+    .tvw-phase.early { background:linear-gradient(90deg,#14532d,#16a34a); }
+    .tvw-phase.late { background:linear-gradient(90deg,#92400e,#f59e0b); color:#1c1300; }
+    .tvw-phase.closed { background:linear-gradient(90deg,#7f1d1d,#dc2626); }
+    .tvw-phase .count { font-size:44px; direction:ltr; margin-inline-start:auto; font-variant-numeric:tabular-nums; }
+    .tvw-stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .tvw-stat { background:rgba(255,255,255,.08); border-radius:14px; padding:8px 18px; min-width:120px; text-align:center; }
+    .tvw-stat b { display:block; font-size:30px; }
+    .tvw-stat span { font-size:13px; color:#b8c6dd; }
+
+    .tvw-grid { display:grid; gap:10px; --f:14px; grid-template-columns:repeat(auto-fill,minmax(15em,1fr)); font-size:var(--f); }
+    .tvw-card { position:relative; background:#0f2744; border:.2em solid transparent; border-radius:1.3em; padding:1em .6em .8em;
+      text-align:center; cursor:pointer; transition:transform .15s, border-color .3s, background .3s; overflow:hidden; }
+    .tvw-card:hover { transform:translateY(-3px); }
+    .tvw-card.PRESENT { border-color:#22c55e; background:#0d3a2b; }
+    .tvw-card.LATE { border-color:#f59e0b; background:#3b2d0d; }
+    .tvw-card.ABSENT, .tvw-card.EXCUSED { opacity:.55; border-color:#7f1d1d; }
+    .tvw-card.pulse { animation:tvwPulse 1.2s ease-out 1; }
+    @keyframes tvwPulse { 0%{transform:scale(1);box-shadow:0 0 0 0 rgba(34,197,94,.9);} 60%{transform:scale(1.07);box-shadow:0 0 0 24px rgba(34,197,94,0);} 100%{transform:scale(1);} }
+    .tvw-photo { width:calc(var(--f)*8); height:calc(var(--f)*8); margin:0 auto calc(var(--f)*.5); border-radius:50%; overflow:hidden; background:#16355d;
+      display:flex; align-items:center; justify-content:center; font-size:3.3em; font-weight:800; border:calc(var(--f)*.28) solid rgba(255,255,255,.18); box-sizing:border-box; }
+    .tvw-photo img { width:100%; height:100%; object-fit:cover; }
+    .tvw-name { font-size:1.4em; font-weight:800; line-height:1.25; min-height:2.5em; display:flex; align-items:center; justify-content:center; }
+    .tvw-code { font-size:1em; color:#9fb0cc; direction:ltr; margin-bottom:.4em; }
+    .tvw-row { display:flex; justify-content:center; gap:.5em; align-items:center; font-weight:800; }
+    .tvw-pts { background:rgba(232,185,79,.18); color:#ffd978; border-radius:999px; padding:.2em .8em; font-size:1.3em; }
+    .tvw-lvl { background:rgba(255,255,255,.1); border-radius:999px; padding:.2em .7em; font-size:.95em; }
+    .tvw-badges { margin-top:.5em; min-height:1.8em; font-size:1.55em; letter-spacing:2px; }
+    .tvw-ribbon { position:absolute; top:.7em; inset-inline-start:.7em; border-radius:.7em; padding:.15em .7em; font-size:.95em; font-weight:800; }
+    .tvw-ribbon.PRESENT { background:#22c55e; color:#052e14; }
+    .tvw-ribbon.LATE { background:#f59e0b; color:#2b1b00; }
+    .tvw-ribbon.ABSENT { background:#dc2626; }
+    .tvw-nobal { position:absolute; top:.7em; inset-inline-end:.7em; background:#fbbf24; color:#3b2800; border-radius:.7em; padding:.15em .55em; font-size:.85em; font-weight:800; }
+
+    .tvw-msg { position:fixed; bottom:18px; inset-inline:22px; padding:14px 20px; border-radius:16px; font-size:22px; font-weight:800;
+      display:none; z-index:50; text-align:center; }
+    .tvw-msg.err { background:#b91c1c; display:block; }
+    .tvw-msg.ok { background:#15803d; display:block; }
+
+    /* الاحتفالية */
+    .cele { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; flex-direction:column;
+      background:radial-gradient(circle at 50% 35%, rgba(14,52,96,.97), rgba(3,12,24,.98)); text-align:center; }
+    .cele.show { display:flex; animation:celeIn .35s ease-out; }
+    @keyframes celeIn { from{opacity:0; transform:scale(.92);} to{opacity:1; transform:scale(1);} }
+    .cele .big-photo { width:min(34vh,300px); height:min(34vh,300px); border-radius:50%; overflow:hidden; border:8px solid var(--gold-light,#e8b94f);
+      box-shadow:0 0 70px rgba(232,185,79,.65); background:#16355d; display:flex; align-items:center; justify-content:center; font-size:110px; font-weight:900; }
+    .cele .big-photo img, .cele .big-photo video { width:100%; height:100%; object-fit:cover; }
+    .cele .welcome { font-size:30px; color:#9fe8b5; font-weight:800; margin-top:16px; }
+    .cele .cname { font-size:min(9vh,76px); font-weight:900; line-height:1.15; margin:4px 20px; }
+    .cele .cpts { font-size:min(7vh,58px); font-weight:900; color:#ffd978; text-shadow:0 0 24px rgba(255,217,120,.7); animation:celePop .7s ease-out; }
+    @keyframes celePop { 0%{transform:scale(.3);opacity:0;} 70%{transform:scale(1.25);} 100%{transform:scale(1);opacity:1;} }
+    .cele .cinfo { font-size:26px; color:#c9d6ec; margin-top:6px; }
+    .cele .cach { font-size:28px; margin-top:12px; color:#ffd978; font-weight:800; }
+    .cele .cwarn { margin-top:10px; background:#fbbf24; color:#3b2800; padding:6px 18px; border-radius:12px; font-weight:800; font-size:20px; }
+    .cele video.full { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.30; z-index:0; }
+    .cele > *:not(video.full) { position:relative; z-index:1; }
+    #scan-input { position:fixed; opacity:0; pointer-events:none; width:1px; height:1px; }
+    .tvw-hint { color:#9fb0cc; font-size:14px; margin:4px 0 12px; }
+  </style>
 </head>
-<body style="background:var(--navy-900);">
-<div class="tv-screen">
-  <a class="btn btn-outline btn-sm tv-back" href="/attendance/session/{{ ts.id }}">← رجوع</a>
-  <div class="tv-count" id="tv-count">✅ 0 حاضر</div>
-
-  <div class="tv-header">
-    <img class="tv-logo" src="{{ url_for('static', filename='img/logo_white.png') }}" alt="FOUQ">
-    <h1>{{ ts.group_name }}</h1>
-    <div class="tv-sub">امسح الباركود لتسجيل الحضور تلقائيًا ⚡</div>
-  </div>
-
-  <input id="scan-input" class="tv-scan-input" type="text" autocomplete="off"
-         placeholder="👉 امسح الباركود الآن…">
-
-  <div id="tv-idle" class="tv-idle">
-    <span class="emoji">🥅</span>
-    بانتظار أول لاعب… جاهزون؟
-  </div>
-
-  <div id="tv-reveal" class="tv-reveal" style="display:none;">
-    <div class="tv-avatar" id="tv-avatar"></div>
-    <div class="tv-name" id="tv-name"></div>
-    <div class="tv-code" id="tv-code"></div>
-    <div class="tv-stats">
-      <div class="tv-stat"><div class="v" id="tv-points">-</div><div class="l">⭐ رصيد فوق</div></div>
-      <div class="tv-stat"><div class="v" id="tv-level">-</div><div class="l">🏆 المستوى</div></div>
-      <div class="tv-stat"><div class="v" id="tv-remaining">-</div><div class="l">📅 حصص متبقية</div></div>
+<body>
+<div class="tvw">
+  <div class="tvw-top">
+    <img src="{{ url_for('static', filename='img/logo_white.png') }}" alt="FOUQ">
+    <div class="tvw-title">
+      <h1>{{ ts.group_name }}</h1>
+      <div class="sub">شاشة التحضير · {{ ts.session_date }} · {{ ts.start_time }}</div>
     </div>
-    <div class="tv-message" id="tv-message"></div>
+    <a class="tvw-back" href="/attendance/session/{{ ts.id }}">← رجوع لصفحة الحصة</a>
+    <div class="tvw-clock"><div class="t" id="clock">--:--:--</div><div class="d" id="cdate"></div></div>
   </div>
+
+  <div class="tvw-controls">
+    <button class="tvw-btn start" id="btn-start">▶ بدء التحضير<small id="start-sub"></small></button>
+    <button class="tvw-btn stop" id="btn-stop">■ إغلاق التحضير<small>يوقف المسح ويسجّل من لم يحضر «غائب»</small></button>
+  </div>
+
+  <div class="tvw-phase" id="phase"><span id="phase-text">...</span><span class="count" id="phase-count"></span></div>
+
+  <div class="tvw-stats">
+    <div class="tvw-stat"><b id="c-present">0</b><span>✅ حاضر مبكرًا</span></div>
+    <div class="tvw-stat"><b id="c-late">0</b><span>⏰ متأخر</span></div>
+    <div class="tvw-stat"><b id="c-pending">0</b><span>⏳ لم يصل بعد</span></div>
+    <div class="tvw-stat"><b id="c-absent">0</b><span>❌ غائب</span></div>
+    <div class="tvw-stat"><b id="c-total">0</b><span>👥 الإجمالي</span></div>
+  </div>
+  <div class="tvw-hint">امسح باركود اللاعب بالقارئ، أو المس بطاقته على الشاشة لتحضيره يدويًا.</div>
+
+  <div class="tvw-grid" id="grid"></div>
+</div>
+
+<input id="scan-input" type="text" autocomplete="off">
+<div class="tvw-msg" id="msg"></div>
+
+<div class="cele" id="cele">
+  <div class="big-photo" id="c-photo"></div>
+  <div class="welcome" id="c-welcome">أهلًا بك!</div>
+  <div class="cname" id="c-name"></div>
+  <div class="cpts" id="c-pts"></div>
+  <div class="cinfo" id="c-info"></div>
+  <div class="cach" id="c-ach"></div>
+  <div class="cwarn" id="c-warn" style="display:none;"></div>
 </div>
 
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 <script>
-const sessionId = {{ ts.id }};
-const scanInput = document.getElementById("scan-input");
-const idleBox = document.getElementById("tv-idle");
-const reveal = document.getElementById("tv-reveal");
-const countEl = document.getElementById("tv-count");
-let presentCount = 0;
-let hideTimer = null;
+const SID = {{ ts.id }};
+const $ = (id) => document.getElementById(id);
+const scanInput = $("scan-input");
+let state = null;
+let celeTimer = null;
+let audioCtx = null;
+let prevStatus = {};
+let localElapsedBase = 0, localBaseAt = Date.now();
 
-scanInput.focus();
-document.addEventListener("click", () => scanInput.focus());
+function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+function pad(n) { return String(n).padStart(2, "0"); }
+function fmtMMSS(sec) { sec = Math.max(0, Math.floor(sec)); return pad(Math.floor(sec / 60)) + ":" + pad(sec % 60); }
 
-scanInput.addEventListener("keydown", async (e) => {
+// ساعة بتوقيت السعودية (بغض النظر عن ضبط جهاز الشاشة)
+function tickClock() {
+  const now = new Date();
+  $("clock").textContent = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(now);
+  $("cdate").textContent = new Intl.DateTimeFormat("ar-SA", { timeZone: "Asia/Riyadh", weekday: "long", day: "numeric", month: "long" }).format(now);
+}
+setInterval(tickClock, 1000); tickClock();
+
+function beep(freqs, dur = 0.16) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    freqs.forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "triangle"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, audioCtx.currentTime + i * dur);
+      g.gain.exponentialRampToValueAtTime(0.35, audioCtx.currentTime + i * dur + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + i * dur + dur);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(audioCtx.currentTime + i * dur); o.stop(audioCtx.currentTime + i * dur + dur + 0.02);
+    });
+  } catch (e) {}
+}
+const fanfare = () => beep([523, 659, 784, 1046], 0.15);
+const errBeep = () => beep([220, 180], 0.22);
+
+function showMsg(text, ok) {
+  const m = $("msg"); m.textContent = text; m.className = "tvw-msg " + (ok ? "ok" : "err");
+  clearTimeout(showMsg.t); showMsg.t = setTimeout(() => { m.className = "tvw-msg"; }, 4500);
+}
+
+function render() {
+  if (!state) return;
+  const c = state.counts;
+  $("c-present").textContent = c.present; $("c-late").textContent = c.late;
+  $("c-pending").textContent = c.pending; $("c-absent").textContent = c.absent; $("c-total").textContent = c.total;
+
+  const ph = state.phase;
+  $("btn-start").disabled = (ph === "EARLY" || ph === "LATE");
+  $("btn-stop").disabled = (ph !== "EARLY" && ph !== "LATE");
+  $("btn-start").firstChild.textContent = ph === "CLOSED" ? "▶ إعادة فتح التحضير" : (ph === "NOT_STARTED" ? "▶ بدء التحضير" : "✔ التحضير جارٍ");
+  $("start-sub").textContent = `أول ${state.early_minutes} دقيقة: حضور مبكر +${state.early_points} نقطة، ثم تأخير +${state.late_points} نقطة`;
+
+  const box = $("phase");
+  box.className = "tvw-phase " + ({ EARLY: "early", LATE: "late", CLOSED: "closed" }[ph] || "");
+  const txt = {
+    NOT_STARTED: "⏸ لم يبدأ التحضير — اضغط الزر الأخضر «بدء التحضير»",
+    EARLY: `🟢 مرحلة الحضور المبكر — كل من يصل الآن يأخذ +${state.early_points} نقطة`,
+    LATE: `🟠 انتهى الحضور المبكر — الحضور الآن «متأخر» ويأخذ +${state.late_points} نقطة`,
+    CLOSED: "🔴 تم إغلاق التحضير",
+  }[ph];
+  $("phase-text").textContent = txt;
+  renderCountdown();
+
+  const grid = $("grid");
+  grid.innerHTML = "";
+  state.players.forEach((p) => {
+    const el = document.createElement("div");
+    el.className = "tvw-card " + (p.status || "");
+    el.dataset.id = p.id;
+    const photo = p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : esc((p.first_name || "?")[0]);
+    const badges = p.achievements.slice(0, 6).map(a => `<span title="${esc(a.name)}">${esc(a.icon)}</span>`).join("");
+    const more = p.achievements.length > 6 ? `<small>+${p.achievements.length - 6}</small>` : "";
+    const ribbon = p.status === "PRESENT" ? '<div class="tvw-ribbon PRESENT">✅ مبكر</div>'
+      : p.status === "LATE" ? '<div class="tvw-ribbon LATE">⏰ متأخر</div>'
+      : (p.status === "ABSENT" || p.status === "EXCUSED") ? '<div class="tvw-ribbon ABSENT">غائب</div>' : "";
+    el.innerHTML = `${ribbon}${p.no_balance ? '<div class="tvw-nobal">بدون رصيد</div>' : ""}
+      <div class="tvw-photo">${photo}</div>
+      <div class="tvw-name">${esc(p.name)}</div>
+      <div class="tvw-code">${esc(p.code)}</div>
+      <div class="tvw-row"><span class="tvw-pts">⭐ ${p.points}</span><span class="tvw-lvl">🏆 ${esc(p.level)}</span></div>
+      <div class="tvw-badges">${badges}${more}</div>`;
+    if (prevStatus[p.id] !== undefined && prevStatus[p.id] !== p.status && (p.status === "PRESENT" || p.status === "LATE")) el.classList.add("pulse");
+    el.addEventListener("click", () => manualCheckin(p.id));
+    grid.appendChild(el);
+    prevStatus[p.id] = p.status;
+  });
+  fitGrid();
+}
+
+// يضبط حجم البطاقات تلقائيًا ليظهر كل اللاعبين على الشاشة بدون تمرير
+function fitGrid() {
+  const grid = $("grid"); if (!state || !state.players.length) return;
+  const n = state.players.length;
+  const W = grid.clientWidth, top = grid.getBoundingClientRect().top + window.scrollY;
+  const H = window.innerHeight - top - 12;
+  let best = 6;
+  for (let f = 18; f >= 6; f -= 0.5) {
+    const cw = 15 * f, ch = 21.5 * f;
+    const cols = Math.max(1, Math.floor((W + 10) / (cw + 10)));
+    const rows = Math.ceil(n / cols);
+    if (rows * (ch + 10) - 10 <= H) { best = f; break; }
+  }
+  grid.style.setProperty("--f", best + "px");
+}
+window.addEventListener("resize", fitGrid);
+
+function renderCountdown() {
+  if (!state) return;
+  const drift = (Date.now() - localBaseAt) / 1000;
+  const cnt = $("phase-count");
+  if (state.phase === "EARLY") {
+    cnt.textContent = fmtMMSS(Math.max(0, state.early_remaining - drift));
+  } else if (state.phase === "LATE") {
+    cnt.textContent = "+" + fmtMMSS(state.elapsed + drift - state.early_minutes * 60);
+  } else if (state.phase === "NOT_STARTED") {
+    cnt.textContent = fmtMMSS(state.early_minutes * 60);
+  } else cnt.textContent = "";
+}
+setInterval(() => {
+  if (!state) return;
+  renderCountdown();
+  const drift = (Date.now() - localBaseAt) / 1000;
+  if (state.phase === "EARLY" && state.early_remaining - drift <= 0) refresh();  // تحوّل تلقائي إلى «متأخر»
+}, 1000);
+
+async function refresh() {
+  try {
+    const res = await fetch(`/attendance/session/${SID}/tv/state`, { headers: { Accept: "application/json" } });
+    if (!res.ok) return;
+    state = await res.json();
+    localBaseAt = Date.now();
+    render();
+  } catch (e) {}
+}
+
+function celebrate(r) {
+  const p = r.player;
+  clearTimeout(celeTimer);
+  $("c-photo").innerHTML = p.celebration_url && /\.(mp4|webm|mov)$/i.test(p.celebration_url)
+    ? `<video src="${esc(p.celebration_url)}" autoplay playsinline></video>`
+    : (p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : esc((p.first_name || "?")[0]));
+  const old = document.querySelector("#cele video.full"); if (old) old.remove();
+  if (p.celebration_url && /\.(mp4|webm|mov)$/i.test(p.celebration_url)) {
+    const v = document.createElement("video"); v.className = "full"; v.src = p.celebration_url; v.autoplay = true; v.muted = false; v.playsInline = true;
+    $("cele").prepend(v); v.play().catch(() => {});
+    const small = $("c-photo").querySelector("video"); if (small) small.muted = true;
+  }
+  $("c-welcome").textContent = r.status === "PRESENT" ? "🎉 أهلًا بالبطل — حضور مبكر!" : "👋 أهلًا بك — حياك الله!";
+  $("c-name").textContent = p.name;
+  $("c-pts").textContent = r.points_awarded ? `+${r.points_awarded} نقطة ⭐` : "";
+  $("c-info").textContent = `${r.points_reason ? r.points_reason + " · " : ""}رصيد فوق: ${r.points} · المستوى: ${r.level_name}`;
+  $("c-ach").textContent = (r.new_achievements || []).length ? "🏅 إنجاز جديد: " + r.new_achievements.map(a => a.icon + " " + a.name).join("  ") : "";
+  const w = $("c-warn");
+  if (r.no_balance) { w.style.display = "block"; w.textContent = "⚠️ لا يوجد رصيد حصص مسجّل لهذا اللاعب — راجع الإدارة"; } else w.style.display = "none";
+  $("cele").classList.add("show");
+  fanfare(); confettiBurst(r.status === "PRESENT" ? 90 : 45);
+  if (r.status === "PRESENT") setTimeout(() => confettiBurst(60), 600);
+  const dur = (p.celebration_url && /\.(mp4|webm|mov)$/i.test(p.celebration_url)) ? 9000 : 5200;
+  celeTimer = setTimeout(() => { $("cele").classList.remove("show"); const v = document.querySelector("#cele video.full"); if (v) v.remove(); scanInput.focus(); }, dur);
+}
+$("cele").addEventListener("click", () => { $("cele").classList.remove("show"); clearTimeout(celeTimer); const v = document.querySelector("#cele video.full"); if (v) v.remove(); });
+
+async function doCheckin(payload) {
+  const res = await postJSON(`/attendance/session/${SID}/tv/scan`, payload);
+  if (!res.ok) { errBeep(); showMsg("❌ " + (res.message || "تعذّر التحضير"), false); return; }
+  if (res.already) { showMsg(`⚠️ ${res.player.name} — تم تحضيره مسبقًا`, false); return; }
+  celebrate(res);
+  await refresh();
+}
+function manualCheckin(pid) {
+  const p = state && state.players.find(x => x.id === pid);
+  if (p && (p.status === "PRESENT" || p.status === "LATE")) { showMsg(`⚠️ ${p.name} — تم تحضيره مسبقًا`, false); return; }
+  doCheckin({ player_id: pid });
+}
+
+scanInput.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
-  const code = scanInput.value.trim();
-  scanInput.value = "";
-  if (!code) return;
-  const res = await postJSON(`/attendance/session/${sessionId}/scan`, { code });
-  showReveal(res);
+  const code = scanInput.value.trim(); scanInput.value = "";
+  if (code) doCheckin({ code });
+});
+document.addEventListener("click", () => scanInput.focus());
+scanInput.focus();
+
+$("btn-start").addEventListener("click", async () => {
+  fanfare();
+  const res = await postJSON(`/attendance/session/${SID}/tv/start`, {});
+  if (!res.ok) { showMsg("❌ " + (res.message || "تعذّر البدء"), false); return; }
+  showMsg(`✅ بدأ التحضير — أول ${state ? state.early_minutes : 20} دقيقة حضور مبكر`, true);
+  await refresh();
+});
+$("btn-stop").addEventListener("click", async () => {
+  if (!confirm("إغلاق التحضير؟ سيتوقف المسح ويُسجَّل من لم يحضر «غائب» (بدون خصم حصص).")) return;
+  const res = await postJSON(`/attendance/session/${SID}/tv/close`, {});
+  if (!res.ok) { showMsg("❌ " + (res.message || "تعذّر الإغلاق"), false); return; }
+  showMsg(`🔴 تم إغلاق التحضير — سُجّل ${res.marked_absent} غائبًا`, true);
+  await refresh();
 });
 
-function showReveal(res) {
-  clearTimeout(hideTimer);
-  idleBox.style.display = "none";
-  reveal.style.display = "block";
-  reveal.className = "tv-reveal " + (res.ok ? "" : "err");
-
-  if (res.ok) {
-    const avatar = document.getElementById("tv-avatar");
-    avatar.innerHTML = res.photo_url ? `<img src="${res.photo_url}" alt="">` : (res.player_name ? res.player_name[0] : "🧒");
-    document.getElementById("tv-name").textContent = res.player_name || "";
-    document.getElementById("tv-code").textContent = res.player_code || "";
-    document.getElementById("tv-points").textContent = res.points ?? "-";
-    document.getElementById("tv-level").textContent = res.level_name || "-";
-    document.getElementById("tv-remaining").textContent = res.remaining_total ?? "-";
-    const msg = document.getElementById("tv-message");
-    msg.textContent = res.already ? "⚠️ تم تسجيله مسبقًا" : "✅ تم تسجيل الحضور بنجاح!";
-    msg.className = "tv-message " + (res.already ? "err" : "ok");
-    if (!res.already) {
-      presentCount++;
-      countEl.textContent = `✅ ${presentCount} حاضر`;
-      confettiBurst(30);
-    }
-  } else {
-    document.getElementById("tv-avatar").innerHTML = "❌";
-    document.getElementById("tv-name").textContent = "لم يتم العثور على اللاعب";
-    document.getElementById("tv-code").textContent = "";
-    document.getElementById("tv-points").textContent = "-";
-    document.getElementById("tv-level").textContent = "-";
-    document.getElementById("tv-remaining").textContent = "-";
-    const msg = document.getElementById("tv-message");
-    msg.textContent = "❌ " + (res.message || "خطأ");
-    msg.className = "tv-message err";
-  }
-
-  hideTimer = setTimeout(() => {
-    reveal.style.display = "none";
-    idleBox.style.display = "block";
-    scanInput.focus();
-  }, 4500);
-}
+refresh();
+setInterval(refresh, 5000);
 </script>
 </body>
 </html>

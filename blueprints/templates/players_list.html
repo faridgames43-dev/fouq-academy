@@ -23,6 +23,7 @@
   <a class="btn btn-outline" href="/admin/restore-expired-sessions">➕ إرجاع حصص لمن انتهت صلاحيتها</a>
   {% endif %}
   {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER'] %}
+  <a class="btn btn-gold" href="/players/cards">🪪 طباعة بطاقات اللاعبين (A4)</a>
   <a class="btn btn-outline" href="/accounts/export-fouq-roster">📄 تصدير بيانات لاعبي أكاديمية فوق (PDF)</a>
   {% endif %}
 </div>

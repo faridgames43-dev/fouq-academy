@@ -28,7 +28,7 @@
           {% elif p.submission.status == 'APPROVED' %}<span class="badge badge-green">معتمد ✅</span>
           {% else %}<span class="badge badge-red">مرفوض</span>{% endif %}
         </td>
-        <td style="font-size:12.5px;">{{ p.submission.submitted_at if p.submission else '-' }}</td>
+        <td style="font-size:12.5px;">{{ (p.submission.submitted_at|ksa) if p.submission else '-' }}</td>
         <td>
           {% if p.submission %}
             {% if p.submission.file_type == 'video' %}

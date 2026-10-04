@@ -12,7 +12,7 @@
           <div><b>{{ n.title }}</b></div>
           {% if n.body %}<div class="muted">{{ n.body }}</div>{% endif %}
         </div>
-        <span class="muted" style="margin-right:auto; font-size:11px;">{{ n.created_at }}</span>
+        <span class="muted" style="margin-right:auto; font-size:11px;">{{ n.created_at|ksa }}</span>
       </div>
     {% endfor %}
   </div>

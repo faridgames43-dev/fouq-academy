@@ -7,10 +7,28 @@
   {% for label, key, suffix in [
     ('اللاعبون النشطون','active_players',''), ('جديد (30 يوم)','new_players',''),
     ('معدل التجديد','renewal_rate','٪'), ('التسرب','churn','٪'),
-    ('إيراد الشهر','revenue_month',' ر.س'), ('معدل الحضور','avg_attendance','٪'),
+    ('إيراد الشهر (سجلات النظام الداخلية)','revenue_month',' ر.س'), ('معدل الحضور','avg_attendance','٪'),
     ('متوسط التطور','avg_development',''), ('حصص مستحقة قائمة','outstanding_compensation',''),
   ] %}
   <div class="card"><div class="card-title">{{ label }}</div><div class="kpi-value">{{ data[key] }}{{ suffix }}</div></div>
   {% endfor %}
+</div>
+
+<div class="card section" style="border-right:4px solid var(--gold);">
+  <div class="card-title">💰 إجمالي الإيراد الفعلي (من منصة الدفع الخارجية)</div>
+  {% if data.actual_revenue_amount is not none %}
+  <div class="kpi-value">{{ "{:,.2f}".format(data.actual_revenue_amount) }} ر.س</div>
+  <div class="muted" style="font-size:12.5px;">{% if data.actual_revenue_period %}الفترة: {{ data.actual_revenue_period }} · {% endif %}آخر تحديث: {{ data.actual_revenue_updated_at or '-' }}</div>
+  {% else %}
+  <div class="muted">لم يُدخل بعد.</div>
+  {% endif %}
+  <p class="muted" style="font-size:12px;margin-top:6px;">يختلف عن «إيراد الشهر» أعلاه لأنه مأخوذ من ملف المنصة الخارجية (بعد الخصومات)، بينما إيراد النظام يُحسب من اشتراكات سُجّلت داخل النظام.</p>
+  {% if can_edit_revenue %}
+  <form method="post" action="/reports/monthly/actual-revenue" class="flex gap-8 flex-wrap items-center" style="margin-top:8px;">
+    <input type="text" name="amount" class="field" placeholder="المبلغ (ر.س)" value="{{ data.actual_revenue_amount if data.actual_revenue_amount is not none else '' }}" required style="width:160px;">
+    <input type="text" name="period" class="field" placeholder="الفترة (مثال: سبتمبر 2026)" value="{{ data.actual_revenue_period }}" style="width:220px;">
+    <button class="btn btn-gold" type="submit">حفظ</button>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}

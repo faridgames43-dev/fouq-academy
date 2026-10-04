@@ -58,7 +58,7 @@
       <tbody>
         {% for h in history %}
         <tr>
-          <td>{{ h.created_at[:16] }}</td>
+          <td>{{ h.created_at|ksa }}</td>
           <td>{{ h.coach_name or '-' }}</td>
           <td>{{ h.reason }}{% if h.note %}<div class="muted" style="font-size:11px;">{{ h.note }}</div>{% endif %}</td>
           <td style="font-weight:800; color: {{ 'var(--green)' if h.amount > 0 else 'var(--red)' }};">{{ '+' if h.amount > 0 }}{{ h.amount }}</td>
