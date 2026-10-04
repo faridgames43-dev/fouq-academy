@@ -116,8 +116,8 @@ ROSTER_TYPE_FILENAMES = {"fouq": "بيانات_لاعبي_أكاديمية_فو�
 
 
 def _roster_type():
-    t = (request.args.get("type") or "fouq").lower()
-    return t if t in ROSTER_TYPE_FILTERS else "fouq"
+    t = (request.args.get("type") or "all").lower()
+    return t if t in ROSTER_TYPE_FILTERS else "all"
 
 
 @bp.route("/accounts/export-fouq-roster", methods=["GET"])

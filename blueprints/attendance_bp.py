@@ -366,6 +366,41 @@ def delete_session(session_id):
     return redirect(f"/attendance?date={ts['session_date']}")
 
 
+@bp.route("/attendance/cancel-sessions", methods=["POST"])
+@permission_required("cancel_attendance")
+def cancel_sessions():
+    """✕ إلغاء حصص: المحددة، أو كل حصص التاريخ المعروض. يعكس الخصم والنقاط."""
+    conn = get_conn()
+    sel_date = request.form.get("date") or date.today().isoformat()
+    if request.form.get("scope") == "all":
+        ids = [r["id"] for r in q(conn, "SELECT id FROM training_sessions WHERE session_date=? AND status!='CANCELLED'", (sel_date,))]
+    else:
+        ids = []
+        for x in request.form.getlist("session_ids"):
+            try:
+                ids.append(int(x))
+            except ValueError:
+                pass
+    done = players = 0
+    for sid in ids:
+        ts = q1(conn, "SELECT status FROM training_sessions WHERE id=?", (sid,))
+        if not ts or ts["status"] == "CANCELLED":
+            continue
+        try:
+            res = att.cancel_training_session(conn, sid, g.user["id"], request.form.get("reason") or "إلغاء حصة")
+            for pid in res["player_ids"]:
+                ach.recheck_after_attendance_cancel(conn, pid, g.user["id"])
+            done += 1
+            players += res["cancelled"]
+        except att.AttendanceError:
+            pass
+    conn.commit()
+    conn.close()
+    flash(f"تم إلغاء {done} حصة" + (f" وعكس تحضير {players} لاعب (الحصص والنقاط)" if players else "") if done else "لم يتم تحديد أي حصة للإلغاء")
+    nxt = request.form.get("next") or f"/attendance?date={sel_date}"
+    return redirect(nxt if nxt.startswith("/attendance") else "/attendance")
+
+
 @bp.route("/attendance/tv")
 @permission_required("take_attendance")
 def tv_launcher():
