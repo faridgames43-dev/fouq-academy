@@ -21,7 +21,7 @@
     <nav>
       {% set role = current_user.role %}
       {% macro item(href, icon, label, endpoint='') %}
-        <a class="nav-item {% if request.path.startswith(href) %}active{% endif %}" href="{{ href }}">
+        <a class="nav-item {% if request.path.startswith(href) and not (href == '/attendance' and request.path.startswith('/attendance/tv')) and not (href == '/attendance' and request.path.endswith('/tv')) %}active{% endif %}" href="{{ href }}">
           <span class="nav-icon">{{ icon }}</span><span>{{ label }}</span>
         </a>
       {% endmacro %}
@@ -31,6 +31,7 @@
         {{ item('/accounts', '👤', 'الحسابات') }}
         {{ item('/players', '🧒', 'اللاعبون') }}
         {{ item('/attendance', '✅', 'التحضير') }}
+        {{ item('/attendance/tv', '📺', 'شاشة التحضير TV') }}
         {{ item('/renewals', '🔁', 'التجديدات') }}
         {{ item('/retention', '🧲', 'مركز الاحتفاظ') }}
         <div class="section-label">التطوير والمكافآت</div>
@@ -48,6 +49,7 @@
       {% elif role == 'COACH' %}
         {{ item('/coach', '🏠', 'لوحتي') }}
         {{ item('/attendance', '✅', 'التحضير') }}
+        {{ item('/attendance/tv', '📺', 'شاشة التحضير TV') }}
         {{ item('/players', '🧒', 'لاعبيّ') }}
         {{ item('/assignments', '📋', 'مهام اللاعبين') }}
       {% elif role == 'PARENT' %}

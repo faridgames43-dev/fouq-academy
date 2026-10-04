@@ -23,6 +23,14 @@
       <span class="badge {{ {'SCHEDULED':'badge-blue','STARTED':'badge-amber','COMPLETED':'badge-green','CANCELLED':'badge-red'}[s.status] }}">{{ {'SCHEDULED':'مجدولة','STARTED':'جارية','COMPLETED':'مكتملة','CANCELLED':'ملغاة'}[s.status] }}</span>
       <a class="btn btn-sm btn-gold" href="/attendance/session/{{ s.id }}" style="margin-right:auto;">فتح التحضير ←</a>
     </div>
+    <div class="flex gap-8" style="margin-top:8px;">
+      <a class="btn btn-sm btn-outline" href="/attendance/session/{{ s.id }}/tv" target="_blank">📺 شاشة TV</a>
+      {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+      <form method="post" action="/attendance/session/{{ s.id }}/delete" style="margin-right:auto;" onsubmit="return confirm('حذف هذه الحصة نهائيًا؟ سيتم إلغاء تحضير الجميع وإرجاع الحصص المخصومة والنقاط الممنوحة للتحضير.');">
+        <button class="btn btn-sm btn-danger" type="submit">🗑️ حذف الحصة</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
   {% else %}
   <div class="empty-state"><div class="emoji">📅</div><p>لا توجد حصص في هذا التاريخ</p></div>

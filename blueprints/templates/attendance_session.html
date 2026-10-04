@@ -27,6 +27,11 @@
   {% else %}
   <a class="btn btn-gold" href="/attendance/session/{{ ts.id }}/end">🏁 إنهاء الحصة — لحظة فوق</a>
   {% endif %}
+  {% if can_override %}
+  <form method="post" action="/attendance/session/{{ ts.id }}/delete" style="margin-right:auto;" onsubmit="return confirm('حذف هذه الحصة نهائيًا؟ سيتم إلغاء تحضير الجميع وإرجاع الحصص المخصومة والنقاط الممنوحة للتحضير. لا يمكن التراجع.');">
+    <button class="btn btn-danger" type="submit">🗑️ حذف الحصة</button>
+  </form>
+  {% endif %}
 </div>
 
 {% if can_override %}
