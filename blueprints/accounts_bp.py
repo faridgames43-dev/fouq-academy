@@ -3,7 +3,7 @@
 /players/new and /settings. Also hosts the one-time "بدء من جديد" reset
 action that clears demo/test players+coaches+parents before real onboarding."""
 from flask import Blueprint, render_template, request, redirect, g, flash, Response, send_file
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_conn, q, q1, ex
 from business.rbac import login_required, permission_required, roles_required, ADMIN_ROLES
 from business.accounts import create_user_account, find_parent_by_phone, AccountError, generate_password
@@ -238,6 +238,70 @@ def credentials_sheet_pdf():
     players = [{k: v for k, v in p.items() if k != "user_id"} for p in players]
     buf = build_credentials_table_pdf(players, pw) if style == "table" else build_credentials_pdf(players, pw)
     return send_file(buf, as_attachment=True, download_name="بيانات_دخول_اللاعبين.pdf", mimetype="application/pdf")
+
+
+def _diagnose_players(conn, pw, code=None):
+    """لكل لاعب: هل يستطيع الدخول بكود اللاعب + كلمة المرور pw؟ وإن لم يستطع فلماذا."""
+    sql = """SELECT p.id, p.first_name, p.last_name, p.player_code, p.user_id,
+                    u.id AS uid, u.role, u.active, u.must_reset_password, u.password_hash
+             FROM players p LEFT JOIN users u ON u.id = p.user_id"""
+    params = ()
+    if code:
+        sql += " WHERE UPPER(p.player_code)=UPPER(?)"
+        params = (code.strip(),)
+    rows = []
+    for r in q(conn, sql + " ORDER BY p.first_name, p.last_name", params):
+        if not r["user_id"]:
+            reason = "لا يوجد حساب دخول"
+        elif not r["uid"]:
+            reason = "الحساب المرتبط محذوف"
+        elif r["role"] != "PLAYER":
+            reason = f"نوع الحساب غير لاعب ({r['role']})"
+        elif not r["active"]:
+            reason = "الحساب معطّل"
+        elif not check_password_hash(r["password_hash"], pw):
+            reason = "كلمة المرور مختلفة (غُيّرت أو لم تُطبَّق)"
+        else:
+            reason = None
+        rows.append({**{k: r[k] for k in ("id", "first_name", "last_name", "player_code", "user_id")}, "reason": reason,
+                     "must_reset": r["must_reset_password"]})
+    return rows
+
+
+@bp.route("/accounts/login-check", methods=["GET", "POST"])
+@permission_required("manage_players")
+def login_check():
+    """تشخيص دخول اللاعبين: من لا يستطيع الدخول بكلمة المرور الموحدة ولماذا، مع إصلاح بضغطة واحدة."""
+    if request.method == "GET":
+        return render_template("login_check.html", rows=None, pw="", code="", fixed=None)
+    pw = (request.form.get("password") or "").strip()
+    code = (request.form.get("code") or "").strip() or None
+    if len(pw) < 4:
+        flash("اكتب كلمة المرور المطلوب فحصها (4 أحرف على الأقل)")
+        return redirect("/accounts/login-check")
+    conn = get_conn()
+    fixed = None
+    if request.form.get("fix") == "1":
+        h = generate_password_hash(pw)
+        fixed = 0
+        for r in _diagnose_players(conn, pw, code):
+            if not r["reason"]:
+                continue
+            uid = r["user_id"]
+            u = q1(conn, "SELECT id FROM users WHERE id=?", (uid,)) if uid else None
+            if not u:
+                uid = ex(conn, "INSERT INTO users(name, password_hash, role, must_reset_password) VALUES (?,?,?,1)",
+                         (f"{r['first_name']} {r['last_name']}", h, "PLAYER"))
+                ex(conn, "UPDATE players SET user_id=? WHERE id=?", (uid, r["id"]))
+            else:
+                ex(conn, "UPDATE users SET password_hash=?, role='PLAYER', active=1, must_reset_password=1 WHERE id=?", (h, uid))
+            fixed += 1
+        audit_log(conn, g.user["id"], "FIX_PLAYER_LOGINS", "users", None, after={"fixed": fixed, "code": code},
+                  reason="إصلاح دخول اللاعبين بكلمة موحدة")
+        conn.commit()
+    rows = _diagnose_players(conn, pw, code)
+    conn.close()
+    return render_template("login_check.html", rows=rows, pw=pw, code=code or "", fixed=fixed)
 
 
 @bp.route("/accounts/import/template.xlsx", methods=["GET"])
