@@ -27,6 +27,14 @@
   {% else %}
   <a class="btn btn-gold" href="/attendance/session/{{ ts.id }}/end">🏁 إنهاء الحصة — لحظة فوق</a>
   {% endif %}
+  {% if can_override and ts.status != 'CANCELLED' %}
+  <form method="post" action="/attendance/cancel-sessions" style="margin-right:auto;" onsubmit="return confirm('إلغاء هذه الحصة؟ سيتم إلغاء تحضير كل اللاعبين فيها وإرجاع الحصص المخصومة والنقاط. يمكن استعادتها لاحقًا.');">
+    <input type="hidden" name="session_ids" value="{{ ts.id }}"><input type="hidden" name="date" value="{{ ts.session_date }}">
+    <button class="btn btn-red" type="submit">✕ إلغاء الحصة</button>
+  </form>
+  {% elif can_override %}
+  <form method="post" action="/attendance/session/{{ ts.id }}/reopen" style="margin-right:auto;"><button class="btn btn-gold" type="submit">↺ استعادة الحصة الملغاة</button></form>
+  {% endif %}
   {% if can_override %}
   <form method="post" action="/attendance/session/{{ ts.id }}/delete" style="margin-right:auto;" onsubmit="return confirm('حذف هذه الحصة نهائيًا؟ سيتم إلغاء تحضير الجميع وإرجاع الحصص المخصومة والنقاط الممنوحة للتحضير. لا يمكن التراجع.');">
     <button class="btn btn-danger" type="submit">🗑️ حذف الحصة</button>
@@ -50,8 +58,8 @@
     {% endfor %}
   </div>
   <div class="flex gap-8 flex-wrap">
-    <button type="button" class="btn btn-sm btn-danger" id="bulk-cancel-selected">🗑️ إلغاء تحضير المحددين</button>
-    <button type="button" class="btn btn-sm btn-danger" id="bulk-cancel-all">🗑️ إلغاء تحضير الجميع</button>
+    <button type="button" class="btn btn-sm btn-red" id="bulk-cancel-selected">✕ إلغاء تحضير المحددين (جزء من الحصة)</button>
+    <button type="button" class="btn btn-sm btn-red" id="bulk-cancel-all">✕ إلغاء تحضير الجميع</button>
   </div>
 </div>
 {% endif %}

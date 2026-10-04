@@ -9,11 +9,29 @@
   {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
   <a class="btn btn-primary" href="/attendance/new">+ إنشاء حصة</a>
   <a class="btn btn-outline" href="/attendance/no-balance">⚠️ حضور بدون رصيد</a>
+  {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER'] %}<a class="btn btn-outline" href="/players/cards.pdf?mode=all" target="_blank">🪪 طباعة بطاقات كل اللاعبين</a>{% endif %}
   {% endif %}
 </div>
+{% set can_cancel = current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+{% if can_cancel and sessions %}
+<form id="cancel-form" method="post" action="/attendance/cancel-sessions">
+  <input type="hidden" name="date" value="{{ sel_date }}">
+  <input type="hidden" name="scope" id="cancel-scope" value="selected">
+</form>
+<div>
+  <div class="card section flex gap-8 flex-wrap items-center" style="border:1px solid #f4b4ae;">
+    <label class="flex items-center gap-4" style="font-size:13px;"><input type="checkbox" id="sel-all-sessions"> تحديد كل الحصص</label>
+    <span class="muted" id="sel-sessions-count" style="font-size:12.5px;">لا يوجد تحديد</span>
+    <button type="button" class="btn btn-red" id="cancel-selected">✕ إلغاء الحصص المحددة</button>
+    <button type="button" class="btn btn-red" id="cancel-all">✕ إلغاء كل حصص اليوم</button>
+  </div>
+</div>
+{% endif %}
+
 <div class="grid grid-3">
   {% for s in sessions %}
-  <div class="card">
+  <div class="card" {% if s.status=='CANCELLED' %}style="opacity:.65"{% endif %}>
+    {% if can_cancel and s.status!='CANCELLED' %}<label style="font-size:12.5px;"><input type="checkbox" class="sess-cb" form="cancel-form" name="session_ids" value="{{ s.id }}"> تحديد</label>{% endif %}
     <div class="card-title">{{ s.group_name }}</div>
     <h3>{{ s.start_time }} - {{ s.end_time }}</h3>
     <p class="muted">المدرب: {{ s.coach_name or '-' }}</p>
@@ -25,7 +43,12 @@
     </div>
     <div class="flex gap-8" style="margin-top:8px;">
       <a class="btn btn-sm btn-outline" href="/attendance/session/{{ s.id }}/tv" target="_blank">📺 شاشة TV</a>
-      {% if current_user.role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER','SUPERVISOR'] %}
+      {% if can_cancel and s.status!='CANCELLED' %}
+      <button type="button" class="btn btn-sm btn-red cancel-one" data-id="{{ s.id }}">✕ إلغاء الحصة</button>
+      {% elif can_cancel %}
+      <button type="button" class="btn btn-sm btn-gold restore-one" data-id="{{ s.id }}">↺ استعادة الحصة</button>
+      {% endif %}
+      {% if can_cancel %}
       <form method="post" action="/attendance/session/{{ s.id }}/delete" style="margin-right:auto;" onsubmit="return confirm('حذف هذه الحصة نهائيًا؟ سيتم إلغاء تحضير الجميع وإرجاع الحصص المخصومة والنقاط الممنوحة للتحضير.');">
         <button class="btn btn-sm btn-danger" type="submit">🗑️ حذف الحصة</button>
       </form>
@@ -36,4 +59,38 @@
   <div class="empty-state"><div class="emoji">📅</div><p>لا توجد حصص في هذا التاريخ</p></div>
   {% endfor %}
 </div>
+{% if can_cancel and sessions %}
+<form id="restore-form" method="post" style="display:none"></form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const cf = document.getElementById("cancel-form");
+if (cf) {
+  const cbs = () => Array.from(document.querySelectorAll(".sess-cb"));
+  const upd = () => { const n = cbs().filter(c => c.checked).length; document.getElementById("sel-sessions-count").textContent = n ? n + " محددة" : "لا يوجد تحديد"; };
+  document.getElementById("sel-all-sessions").addEventListener("change", e => { cbs().forEach(c => c.checked = e.target.checked); upd(); });
+  cbs().forEach(c => c.addEventListener("change", upd));
+  const warn = "سيتم إلغاء الحصة وإلغاء تحضير كل اللاعبين فيها مع إرجاع الحصص المخصومة والنقاط الممنوحة للتحضير. يمكن استعادة الحصة لاحقًا. متابعة؟";
+  document.getElementById("cancel-selected").addEventListener("click", () => {
+    const n = cbs().filter(c => c.checked).length;
+    if (!n) { alert("حدد حصة واحدة على الأقل (أو جزءًا من الحصص) أولًا."); return; }
+    if (!confirm("إلغاء " + n + " حصة محددة؟ " + warn)) return;
+    document.getElementById("cancel-scope").value = "selected"; cf.submit();
+  });
+  document.getElementById("cancel-all").addEventListener("click", () => {
+    if (!confirm("إلغاء كل حصص هذا اليوم؟ " + warn)) return;
+    document.getElementById("cancel-scope").value = "all"; cf.submit();
+  });
+  document.querySelectorAll(".cancel-one").forEach(b => b.addEventListener("click", () => {
+    if (!confirm(warn)) return;
+    cbs().forEach(c => c.checked = (c.value === b.dataset.id));
+    document.getElementById("cancel-scope").value = "selected"; cf.submit();
+  }));
+  document.querySelectorAll(".restore-one").forEach(b => b.addEventListener("click", () => {
+    const f = document.getElementById("restore-form"); f.action = "/attendance/session/" + b.dataset.id + "/reopen"; f.submit();
+  }));
+}
+</script>
 {% endblock %}

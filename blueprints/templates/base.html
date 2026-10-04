@@ -30,6 +30,7 @@
         {{ item('/dashboard', '🏠', 'الرئيسية') }}
         {{ item('/accounts', '👤', 'الحسابات') }}
         {{ item('/players', '🧒', 'اللاعبون') }}
+        {% if role in ['SUPER_ADMIN','PROJECT_MANAGER','BRANCH_MANAGER'] %}{{ item('/players/cards', '🪪', 'بطاقات اللاعبين') }}{% endif %}
         {{ item('/attendance', '✅', 'التحضير') }}
         {{ item('/attendance/tv', '📺', 'شاشة التحضير TV') }}
         {{ item('/renewals', '🔁', 'التجديدات') }}
