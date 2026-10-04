@@ -343,6 +343,48 @@ def bulk_cancel(session_id):
     return jsonify({"ok": True, "cancelled": cancelled, "total": len(targets)})
 
 
+@bp.route("/attendance/session/<int:session_id>/delete", methods=["POST"])
+@permission_required("cancel_attendance")
+def delete_session(session_id):
+    """🗑️ حذف حصة تحضير: يعكس خصم الحصص والنقاط لكل من حضر ثم يحذف الحصة."""
+    conn = get_conn()
+    ts = q1(conn, "SELECT * FROM training_sessions WHERE id=?", (session_id,))
+    if not ts:
+        conn.close()
+        flash("الحصة غير موجودة")
+        return redirect("/attendance")
+    try:
+        res = att.delete_training_session(conn, session_id, g.user["id"])
+        for pid in res["player_ids"]:
+            ach.recheck_after_attendance_cancel(conn, pid, g.user["id"])
+        conn.commit()
+        flash(f"تم حذف الحصة نهائيًا" + (f" وإلغاء {res['cancelled']} سجل تحضير مع عكس الخصم والنقاط" if res["cancelled"] else ""))
+    except att.AttendanceError as e:
+        conn.rollback()
+        flash(str(e))
+    conn.close()
+    return redirect(f"/attendance?date={ts['session_date']}")
+
+
+@bp.route("/attendance/tv")
+@permission_required("take_attendance")
+def tv_launcher():
+    """مدخل شاشة TV من القائمة الرئيسية: يفتح حصة اليوم مباشرة، أو يعرض اختيارًا إن تعددت."""
+    conn = get_conn()
+    sel_date = request.args.get("date", date.today().isoformat())
+    sql = """SELECT ts.*, g.name AS group_name, c.name AS coach_name,
+             (SELECT COUNT(*) FROM attendance a WHERE a.training_session_id=ts.id AND a.status IN ('PRESENT','LATE')) AS present_count,
+             (SELECT COUNT(*) FROM players p WHERE p.group_id=ts.group_id) AS roster_size
+             FROM training_sessions ts JOIN groups_ g ON g.id=ts.group_id
+             LEFT JOIN coaches c ON c.id=ts.coach_id WHERE ts.session_date=? AND ts.status!='CANCELLED'"""
+    sql, params = _scope_sql(sql, [sel_date])
+    sessions = q(conn, sql + " ORDER BY ts.start_time", tuple(params))
+    conn.close()
+    if len(sessions) == 1 and "pick" not in request.args:
+        return redirect(f"/attendance/session/{sessions[0]['id']}/tv")
+    return render_template("attendance_tv_pick.html", sessions=sessions, sel_date=sel_date)
+
+
 def _finalize_session(conn, session_id, force=False):
     """Returns True if the session was closed, False if it needs the roster
     completed first (and force wasn't set)."""
