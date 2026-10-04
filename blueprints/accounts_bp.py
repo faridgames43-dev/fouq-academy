@@ -191,7 +191,7 @@ def credentials_sheet_pdf():
     if len(pw) < 4:
         flash("اكتب كلمة المرور الموحدة (4 أحرف على الأقل)")
         return redirect("/accounts/credentials-sheet")
-    sql = "SELECT first_name, last_name, player_code AS code FROM players WHERE 1=1"
+    sql = "SELECT first_name, last_name, player_code AS code, user_id FROM players WHERE 1=1"
     params = []
     if scope in ("FOUQ", "LEGACY"):
         sql += " AND player_type=?"; params.append(scope)
@@ -199,10 +199,23 @@ def credentials_sheet_pdf():
         sql += " AND category_id=?"; params.append(category_id)
     conn = get_conn()
     players = [dict(r) for r in q(conn, sql + " ORDER BY first_name, last_name", tuple(params))]
-    conn.close()
     if not players:
+        conn.close()
         flash("لا يوجد لاعبون مطابقون")
         return redirect("/accounts/credentials-sheet")
+    if request.form.get("apply") == "1":
+        # اعتماد كلمة المرور فعليًا (لمن نسي كلمة المرور الموحدة): تُستبدل لحسابات
+        # اللاعبين المطابقين فقط، وتُجبر على التغيير عند أول دخول.
+        h = generate_password_hash(pw)
+        uids = [p["user_id"] for p in players if p.get("user_id")]
+        for uid in uids:
+            ex(conn, "UPDATE users SET password_hash=?, must_reset_password=1 WHERE id=? AND role='PLAYER'", (h, uid))
+        audit_log(conn, g.user["id"], "SET_UNIFIED_PASSWORD", "users", None,
+                  after={"accounts": len(uids), "players_in_scope": len(players)},
+                  reason="اعتماد كلمة مرور موحدة جديدة لحسابات اللاعبين")
+        conn.commit()
+    conn.close()
+    players = [{k: v for k, v in p.items() if k != "user_id"} for p in players]
     buf = build_credentials_table_pdf(players, pw) if style == "table" else build_credentials_pdf(players, pw)
     return send_file(buf, as_attachment=True, download_name="بيانات_دخول_اللاعبين.pdf", mimetype="application/pdf")
 
