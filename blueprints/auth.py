@@ -13,13 +13,14 @@ ROLE_HOME = {
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        identifier = request.form.get("identifier", "").strip()
+        identifier = request.form.get("identifier", "").strip().translate(
+            str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")).replace(" ", "")
         password = request.form.get("password", "")
         conn = get_conn()
         user = q1(conn, "SELECT * FROM users WHERE email=? OR phone=?", (identifier, identifier))
         if not user:
             # players log in with their FOUQ player code instead of an email/phone
-            player = q1(conn, "SELECT user_id FROM players WHERE player_code=? AND user_id IS NOT NULL",
+            player = q1(conn, "SELECT user_id FROM players WHERE UPPER(player_code)=UPPER(?) AND user_id IS NOT NULL",
                         (identifier,))
             if player:
                 user = q1(conn, "SELECT * FROM users WHERE id=?", (player["user_id"],))

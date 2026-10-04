@@ -203,17 +203,37 @@ def credentials_sheet_pdf():
         conn.close()
         flash("لا يوجد لاعبون مطابقون")
         return redirect("/accounts/credentials-sheet")
-    if request.form.get("apply") == "1":
-        # اعتماد كلمة المرور فعليًا (لمن نسي كلمة المرور الموحدة): تُستبدل لحسابات
-        # اللاعبين المطابقين فقط، وتُجبر على التغيير عند أول دخول.
+    if request.form.get("apply") == "1" and request.form.get("download") != "1":
+        # اعتماد كلمة المرور فعليًا على حسابات اللاعبين المحددين (يُنشأ حساب لمن لا حساب له)،
+        # وتُجبر على التغيير عند أول دخول. بعدها تُعرض صفحة ملخص فيها زر تحميل الملف.
         h = generate_password_hash(pw)
-        uids = [p["user_id"] for p in players if p.get("user_id")]
-        for uid in uids:
+        activate = request.form.get("activate") == "1"
+        reset = created = inactive = activated = 0
+        for p in players:
+            uid = p.get("user_id")
+            if not uid:
+                uid = ex(conn, "INSERT INTO users(name, password_hash, role, branch_id, must_reset_password) VALUES (?,?,?,?,1)",
+                         (f"{p['first_name']} {p['last_name']}", h, "PLAYER", None))
+                ex(conn, "UPDATE players SET user_id=? WHERE player_code=?", (uid, p["code"]))
+                created += 1
+                continue
             ex(conn, "UPDATE users SET password_hash=?, must_reset_password=1 WHERE id=? AND role='PLAYER'", (h, uid))
+            reset += 1
+            u = q1(conn, "SELECT active FROM users WHERE id=?", (uid,))
+            if u and not u["active"]:
+                if activate:
+                    ex(conn, "UPDATE users SET active=1 WHERE id=?", (uid,)); activated += 1
+                else:
+                    inactive += 1
         audit_log(conn, g.user["id"], "SET_UNIFIED_PASSWORD", "users", None,
-                  after={"accounts": len(uids), "players_in_scope": len(players)},
+                  after={"reset": reset, "created": created, "activated": activated, "inactive_left": inactive,
+                         "players_in_scope": len(players)},
                   reason="اعتماد كلمة مرور موحدة جديدة لحسابات اللاعبين")
         conn.commit()
+        conn.close()
+        return render_template("credentials_applied.html", total=len(players), reset=reset, created=created,
+                                inactive=inactive, activated=activated, pw=pw, scope=scope,
+                                category_id=category_id or "", style=style)
     conn.close()
     players = [{k: v for k, v in p.items() if k != "user_id"} for p in players]
     buf = build_credentials_table_pdf(players, pw) if style == "table" else build_credentials_pdf(players, pw)
