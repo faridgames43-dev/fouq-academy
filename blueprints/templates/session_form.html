@@ -2,6 +2,7 @@
 {% block title %}حصة جديدة{% endblock %}
 {% block page_title %}إنشاء حصة تدريبية{% endblock %}
 {% block content %}
+{% if not groups %}<div class="card" style="max-width:520px;border:1px solid #f4b4ae;">لا توجد مجموعات في النظام — أنشئ مجموعة أولًا من الإعدادات ثم أنشئ الحصة.</div>{% endif %}
 <div class="card" style="max-width:520px;">
   <form method="post">
     <div class="field"><label>المجموعة</label>
@@ -17,5 +18,5 @@
     <button class="btn btn-primary btn-block" type="submit">حفظ</button>
   </form>
 </div>
-<script>document.querySelector('input[name=session_date]').value = new Date().toISOString().slice(0,10);</script>
+<script>(function(){var d=new Date();var m=('0'+(d.getMonth()+1)).slice(-2),dd=('0'+d.getDate()).slice(-2);document.querySelector('input[name=session_date]').value=d.getFullYear()+'-'+m+'-'+dd;})();</script>
 {% endblock %}
