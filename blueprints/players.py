@@ -183,7 +183,12 @@ def new_player():
     conn = get_conn()
     if request.method == "POST":
         f = request.form
-        code = f.get("player_code") or f"FOUQ-{9000 + (q1(conn, 'SELECT COUNT(*) c FROM players')['c'] + 1)}"
+        from business.accounts import next_player_code
+        code = (f.get("player_code") or "").strip() or next_player_code(conn)
+        if q1(conn, "SELECT 1 x FROM players WHERE player_code=? OR referral_code=?", (code, f"REF-{code}")):
+            conn.close()
+            flash(f"كود اللاعب {code} مستخدم مسبقًا — اترك خانة الكود فارغة ليولَّد تلقائيًا")
+            return redirect("/players/new")
         parent_id = f.get("parent_id") or None
         parent_password = None
         parent_phone = (f.get("parent_phone") or "").strip() or None
