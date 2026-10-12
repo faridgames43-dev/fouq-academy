@@ -297,11 +297,10 @@ def import_players(conn, rows, unified_password, admin_user_id):
     forced to change the shared/random password on first login. Returns a
     summary dict plus the created players grouped by category, ready for
     the credentials PDF."""
-    next_n = q1(conn, "SELECT COUNT(*) c FROM players")["c"] + 1
+    from business.accounts import next_player_code
     created = []
     for r in rows:
-        code = f"FOUQ-{9000 + next_n}"
-        next_n += 1
+        code = next_player_code(conn)
 
         parent_id = None
         if r["parent_name"]:

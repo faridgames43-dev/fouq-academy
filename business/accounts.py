@@ -102,3 +102,20 @@ def set_account_active(conn, user_id, active, admin_user_id):
     ex(conn, "UPDATE users SET active=? WHERE id=?", (1 if active else 0, user_id))
     audit_log(conn, admin_user_id, "ACTIVATE_ACCOUNT" if active else "DEACTIVATE_ACCOUNT", "users", user_id)
     return True
+
+
+def next_player_code(conn, start_after=None):
+    """كود لاعب جديد فريد: أكبر رقم FOUQ-#### موجود + 1 (وليس عدد اللاعبين، لأن الحذف يكرر الأرقام
+    فيصطدم بقيد التفرد). يتحقق أيضًا أن الكود وكود الإحالة غير مستخدمين."""
+    import re
+    mx = 9000
+    for r in conn.execute("SELECT player_code, referral_code FROM players").fetchall():
+        for v in (r["player_code"], r["referral_code"]):
+            m = re.search(r"(\d+)\s*$", str(v or ""))
+            if m:
+                mx = max(mx, int(m.group(1)))
+    n = max(mx, start_after or 0) + 1
+    while conn.execute("SELECT 1 FROM players WHERE player_code=? OR referral_code=?",
+                       (f"FOUQ-{n}", f"REF-FOUQ-{n}")).fetchone():
+        n += 1
+    return f"FOUQ-{n}"
