@@ -1,5 +1,5 @@
 import os
-from flask import Flask, session, redirect, url_for, g, request, render_template
+from flask import Flask, session, redirect, url_for, g, request, render_template, flash
 from db import get_conn, q1, init_db, migrate_db, DB_PATH, close_request_conns
 from jinja2 import ChoiceLoader, FileSystemLoader
 
@@ -85,6 +85,27 @@ def create_app():
     app.teardown_request(close_request_conns)
 
     import sqlite3 as _sqlite3
+
+    @app.errorhandler(_sqlite3.IntegrityError)
+    def db_duplicate(e):
+        """تكرار قيمة فريدة (كود/جوال/بريد) أو ربط ناقص: رسالة واضحة بدل Internal Server Error."""
+        txt = str(e)
+        if "UNIQUE" in txt:
+            what = ("رقم الجوال" if "phone" in txt else "البريد الإلكتروني" if "email" in txt
+                    else "كود اللاعب" if ("player_code" in txt or "referral_code" in txt) else "قيمة")
+            msg = f"لم يتم الحفظ: {what} مستخدم مسبقًا في النظام. عدّله وأعد المحاولة."
+        elif "FOREIGN KEY" in txt:
+            msg = "لم يتم الحفظ: بيان مرتبط غير موجود أو محذوف (مجموعة/فئة/فرع). راجع الاختيارات وأعد المحاولة."
+        elif "NOT NULL" in txt:
+            msg = "لم يتم الحفظ: يوجد حقل مطلوب فارغ. أكمل البيانات وأعد المحاولة."
+        else:
+            msg = "لم يتم الحفظ بسبب بيانات غير صالحة. راجع الحقول وأعد المحاولة."
+        if request.is_json or request.headers.get("Accept", "").startswith("application/json"):
+            from flask import jsonify
+            return jsonify({"ok": False, "message": msg}), 400
+        flash(msg)
+        ref = request.referrer or ""
+        return redirect(ref if ref.startswith(request.host_url) else "/dashboard")
 
     @app.errorhandler(_sqlite3.OperationalError)
     def db_busy(e):
