@@ -1,6 +1,6 @@
 import os
 from flask import Flask, session, redirect, url_for, g, request, render_template
-from db import get_conn, q1, init_db, migrate_db, DB_PATH
+from db import get_conn, q1, init_db, migrate_db, DB_PATH, close_request_conns
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -81,6 +81,18 @@ def create_app():
                retention_bp, audit_bp, search_bp, parent_bp, player_bp, notifications_bp, assignments_bp,
                accounts_bp]:
         app.register_blueprint(bp)
+
+    app.teardown_request(close_request_conns)
+
+    import sqlite3 as _sqlite3
+
+    @app.errorhandler(_sqlite3.OperationalError)
+    def db_busy(e):
+        msg = "النظام مشغول لحظات — أعد المحاولة بعد ثوانٍ."
+        if request.is_json or request.headers.get("Accept", "").startswith("application/json") or request.method == "POST" and request.headers.get("Content-Type", "").startswith("application/json"):
+            from flask import jsonify
+            return jsonify({"ok": False, "message": msg}), 503
+        return render_template("error.html", code=503, message=msg), 503
 
     @app.errorhandler(403)
     def forbidden(e):

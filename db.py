@@ -29,7 +29,33 @@ def get_conn():
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = dict_factory
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
+    # أي اتصال يُفتح داخل طلب ويب يُسجَّل ليُغلق تلقائيًا في نهاية الطلب (teardown في app.py)
+    # حتى لو حدث استثناء قبل conn.close() — فلا يبقى قفل كتابة معلّقًا يسبب "database is locked".
+    try:
+        from flask import has_request_context, g
+        if has_request_context():
+            g.setdefault("_db_conns", []).append(conn)
+    except Exception:
+        pass
     return conn
+
+
+def close_request_conns(exc=None):
+    try:
+        from flask import g
+        conns = g.pop("_db_conns", [])
+    except Exception:
+        return
+    for c in conns:
+        try:
+            c.rollback()
+        except Exception:
+            pass
+        try:
+            c.close()
+        except Exception:
+            pass
 
 
 @contextmanager
@@ -64,6 +90,12 @@ def migrate_db():
     (not just first-run) so a live production database picks up new
     columns/tables safely, without ever dropping or rewriting existing data.
     Every statement here must be safe to run repeatedly."""
+    try:
+        _c = get_conn()
+        _c.execute("PRAGMA journal_mode = WAL")   # قراءة وكتابة متزامنتان دون تعارض
+        _c.close()
+    except Exception:
+        pass
     conn = get_conn()
     cur = conn.cursor()
 
