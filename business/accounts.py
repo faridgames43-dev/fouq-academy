@@ -12,6 +12,20 @@ class AccountError(Exception):
     pass
 
 
+# تشفير أخف (scrypt بتكلفة 8192) بدل الافتراضي 32768: أسرع بـ4 مرات على الخادم الصغير
+# فلا يتجمد الموقع عند دخول عشرات اللاعبين في وقت واحد، وما زال آمنًا بكلمات مرور تُغيَّر عند أول دخول.
+FAST_HASH_METHOD = "scrypt:8192:8:1"
+
+
+def hash_password(password):
+    return generate_password_hash(password, method=FAST_HASH_METHOD)
+
+
+def needs_rehash(pwhash):
+    """بصمات scrypt القديمة الثقيلة (32768) تُحدَّث لخفيفة عند أول دخول ناجح."""
+    return bool(pwhash) and pwhash.startswith("scrypt:") and not pwhash.startswith(FAST_HASH_METHOD)
+
+
 def generate_password(length=8):
     """A fresh, random, human-typeable password — shown once to the admin
     right after creation/reset, never stored or re-displayed in plaintext."""
@@ -32,7 +46,7 @@ def create_user_account(conn, name, role, phone=None, email=None, branch_id=None
     uid = ex(
         conn,
         "INSERT INTO users(name, email, phone, password_hash, role, branch_id, must_reset_password) VALUES (?,?,?,?,?,?,1)",
-        (name, email, phone, generate_password_hash(password), role, branch_id),
+        (name, email, phone, hash_password(password), role, branch_id),
     )
     return uid, password
 
@@ -47,7 +61,7 @@ def create_user_account_with_password(conn, name, role, password, phone=None, em
     uid = ex(
         conn,
         "INSERT INTO users(name, email, phone, password_hash, role, branch_id, must_reset_password) VALUES (?,?,?,?,?,?,1)",
-        (name, email, phone, generate_password_hash(password), role, branch_id),
+        (name, email, phone, hash_password(password), role, branch_id),
     )
     return uid
 
@@ -58,7 +72,7 @@ def reset_password(conn, user_id, admin_user_id):
         raise AccountError("الحساب غير موجود")
     new_password = generate_password()
     ex(conn, "UPDATE users SET password_hash=?, must_reset_password=0 WHERE id=?",
-       (generate_password_hash(new_password), user_id))
+       (hash_password(new_password), user_id))
     audit_log(conn, admin_user_id, "RESET_PASSWORD", "users", user_id, reason="إعادة تعيين كلمة المرور")
     return new_password
 
@@ -76,7 +90,7 @@ def change_own_password(conn, user_id, current_password, new_password):
     if new_password == current_password:
         raise AccountError("اختر كلمة مرور جديدة مختلفة عن الحالية")
     ex(conn, "UPDATE users SET password_hash=?, must_reset_password=0 WHERE id=?",
-       (generate_password_hash(new_password), user_id))
+       (hash_password(new_password), user_id))
     audit_log(conn, user_id, "CHANGE_OWN_PASSWORD", "users", user_id)
     return True
 
