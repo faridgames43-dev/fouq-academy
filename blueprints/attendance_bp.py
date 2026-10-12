@@ -539,13 +539,20 @@ def new_session():
     if request.method == "POST":
         f = request.form
         group = q1(conn, "SELECT * FROM groups_ WHERE id=?", (f.get("group_id"),))
+        sdate = (f.get("session_date") or "").strip() or date.today().isoformat()
+        st = (f.get("start_time") or "").strip()
+        en = (f.get("end_time") or "").strip() or st
+        if not group or not st:
+            conn.close()
+            flash("اختر المجموعة وحدد وقت بداية الحصة")
+            return redirect("/attendance/new")
         sid = ex(conn, """INSERT INTO training_sessions(branch_id, group_id, coach_id, facility_id, session_date,
                           start_time, end_time, goal) VALUES (?,?,?,?,?,?,?,?)""",
                  (group["branch_id"], group["id"], group["coach_id"], f.get("facility_id") or None,
-                  f.get("session_date"), f.get("start_time"), f.get("end_time"), f.get("goal")))
+                  sdate, st, en, f.get("goal")))
         conn.commit(); conn.close()
         flash("تم إنشاء الحصة")
-        return redirect("/attendance?date=" + f.get("session_date"))
+        return redirect("/attendance?date=" + sdate)
     groups = q(conn, "SELECT * FROM groups_")
     facilities = q(conn, "SELECT * FROM facilities")
     conn.close()

@@ -26,6 +26,14 @@ def login():
                 user = q1(conn, "SELECT * FROM users WHERE id=?", (player["user_id"],))
         conn.close()
         if user and check_password_hash(user["password_hash"], password) and user["active"]:
+            from business.accounts import needs_rehash, hash_password
+            if needs_rehash(user["password_hash"]):
+                try:
+                    c2 = get_conn()
+                    c2.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(password), user["id"]))
+                    c2.commit(); c2.close()
+                except Exception:
+                    pass
             session["user_id"] = user["id"]
             session["role"] = user["role"]
             return redirect(ROLE_HOME.get(user["role"], "/dashboard"))

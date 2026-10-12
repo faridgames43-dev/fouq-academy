@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request, redirect, g, flash, Respo
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_conn, q, q1, ex
 from business.rbac import login_required, permission_required, roles_required, ADMIN_ROLES
-from business.accounts import create_user_account, find_parent_by_phone, AccountError, generate_password
+from business.accounts import hash_password, create_user_account, find_parent_by_phone, AccountError, generate_password
 from business.audit import log as audit_log
 from business import reset_demo
 from business import bulk_import
@@ -206,7 +206,7 @@ def credentials_sheet_pdf():
     if request.form.get("apply") == "1" and request.form.get("download") != "1":
         # اعتماد كلمة المرور فعليًا على حسابات اللاعبين المحددين (يُنشأ حساب لمن لا حساب له)،
         # وتُجبر على التغيير عند أول دخول. بعدها تُعرض صفحة ملخص فيها زر تحميل الملف.
-        h = generate_password_hash(pw)
+        h = hash_password(pw)
         activate = request.form.get("activate") == "1"
         reset = created = inactive = activated = 0
         for p in players:
@@ -294,7 +294,7 @@ def login_check():
     conn = get_conn()
     fixed = None
     if request.form.get("fix") == "1":
-        h = generate_password_hash(pw)
+        h = hash_password(pw)
         fixed = 0
         for r in _diagnose_players(conn, pw, code):
             if not r["reason"]:
